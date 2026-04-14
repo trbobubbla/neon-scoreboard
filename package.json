@@ -1,10 +1,32 @@
 {
-  "name": "essportal_report",
+  "name": "neon-scoreboard",
   "version": "1.0.0",
-  "description": "ESSPortal matchrapport med webbsida och sammanfattning",
+  "description": "Real-time IPSC match results with true cross-division combined rankings",
   "main": "app.js",
   "scripts": {
     "start": "node app.js"
+  },
+  "keywords": [
+    "ipsc",
+    "shooting",
+    "scoreboard",
+    "match-results",
+    "hit-factor",
+    "combined-ranking",
+    "essportal"
+  ],
+  "author": "trbobubbla",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/trbobubbla/neon-scoreboard.git"
+  },
+  "bugs": {
+    "url": "https://github.com/trbobubbla/neon-scoreboard/issues"
+  },
+  "homepage": "https://github.com/trbobubbla/neon-scoreboard#readme",
+  "engines": {
+    "node": ">=18.0.0"
   },
   "dependencies": {
     "axios": "^1.7.0",

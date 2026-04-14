@@ -1,8 +1,15 @@
-# Node
+# Dependencies
 node_modules/
+
+# Lock files (regenerated on install)
 package-lock.json
 
-# Python
+# Debug output
+debug-*.html
+debug-*.txt
+temp-*.html
+
+# Python (legacy prototype)
 __pycache__/
 *.pyc
 *.pyo
@@ -15,10 +22,12 @@ venv/
 data/
 results/
 
-# VS Code
+# IDE
 .vscode/
+.idea/
+*.swp
+*.swo
 
-# Debug files
-debug-*.html
-debug-*.txt
-temp-*.html
+# OS
+.DS_Store
+Thumbs.db

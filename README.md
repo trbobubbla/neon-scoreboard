@@ -1,60 +1,143 @@
-# ESSPortal Rapport
+<div align="center">
 
-Det här repot innehåller en Node/Express-webbapp för att läsa ESSPortal-matchlänkar, sammanställa data och visa statistik.
+# ⚡ Neon Scoreboard
 
-## Syfte
+**Real-time IPSC match results with true cross-division combined rankings**
 
-- Hämta data direkt från en ESSPortal-matchlänk
-- Visa matchinformation i webbläsaren
-- Beräkna grundlägande statistik för numeriska fält
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![Node.js](https://img.shields.io/badge/Node.js-18%2B-339933?logo=node.js&logoColor=white)](https://nodejs.org/)
+[![Express](https://img.shields.io/badge/Express-4.x-000000?logo=express&logoColor=white)](https://expressjs.com/)
+[![PRs Welcome](https://img.shields.io/badge/PRs-welcome-brightgreen.svg)](CONTRIBUTING.md)
 
-## Struktur
+<br>
 
-- `app.js` – Node/Express-server för webbsidan
-- `package.json` – projektberoenden
-- `views/` – EJS-mall för gränssnittet
-- `src/` – kvarvarande Python-skript för tidigare prototyp
+*Paste an ESSPortal match URL → get instant division results and accurate combined rankings powered by hit-factor analysis across all divisions.*
 
-## Kör webbsidan
+</div>
 
-1. Installera beroenden:
+---
 
-```powershell
+## ✨ Features
+
+- **🎯 Division Results** — View per-division standings with all competitor data (placement, score %, POM, category, class, region)
+- **📊 True Combined Rankings** — Cross-division rankings using per-stage Hit Factor comparison (not division-relative percentages)
+- **⚡ Parallel Fetching** — All divisions fetched simultaneously; combined calculates in ~30–60 seconds
+- **🔒 reCAPTCHA Handling** — Automated reCAPTCHA v3 token generation via headless browser
+- **🌙 Cyberpunk UI** — Glassmorphism design with neon gradients, smooth animations, and responsive layout
+- **📱 Fully Responsive** — Works on mobile, tablet, and desktop
+- **💾 Smart Caching** — Division data and combined rankings cached per session for instant re-access
+
+## 🚀 Quick Start
+
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) 18 or higher
+- Chromium (bundled with Puppeteer)
+
+### Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/trbobubbla/neon-scoreboard.git
+cd neon-scoreboard
+
+# Install dependencies
 npm install
-```
 
-2. Starta appen:
-
-```powershell
+# Start the server
 npm start
 ```
 
-Om port 5000 redan är upptagen kan du ange en annan port:
+The app will be running at **http://localhost:5000**
 
-```powershell
-$env:PORT=5001; npm start
+> **Tip:** To use a different port, set the `PORT` environment variable:
+> ```bash
+> PORT=3000 npm start
+> ```
+
+### Usage
+
+1. Open the app in your browser
+2. Paste an ESSPortal match URL (e.g. `https://portal.ipscess.org/portal/match/...`)
+3. Click **Launch** to load and preload all division results
+4. Click any **division button** to view that division's standings
+5. Click **Combined** to see the true cross-division ranking
+
+## 🏗️ Architecture
+
+```
+neon-scoreboard/
+├── app.js              # Express server, scraping logic, combined calculation
+├── views/
+│   └── index.ejs       # Cyberpunk UI template (glassmorphism + neon)
+├── package.json        # Dependencies and scripts
+└── src/                # Legacy Python prototype (archived)
 ```
 
-3. Öppna webbläsaren:
+### How Combined Rankings Work
 
-`http://127.0.0.1:5000`
+Standard IPSC portals only show division-relative standings — a shooter's "Score %" is relative to the best in their division. This makes cross-division comparison meaningless.
 
-## Samla alla divisioner
+**Neon Scoreboard solves this** by:
 
-När du anger en matchlänk visar appen matchens divisioner som klickbara knappar.
-- Klicka på en division för att se dess faktiska resultat i appen.
-- Klicka på `Combined` för att se en sammanställning av alla divisioner i en gemensam vy.
+1. Fetching the **stage view** (`?group=stage`) for each division
+2. Extracting the **raw Hit Factor** (points ÷ time) for every shooter on every stage
+3. For each stage, finding the **highest HF across all divisions**
+4. Computing stage match points: `(shooter_HF / stage_max_HF) × 100`
+5. Summing all stage points and ranking globally
 
-Appen använder en headless browser för att hämta divisionsresultaten direkt från portalen. Om portalen blockerar åtkomst eller om resultaten kräver aktiv reCAPTCHA-verifiering kan appen visa en notis istället för tabellens faktiska rader.
+This produces **accurate cross-division combined results** that truly reflect each shooter's performance relative to the entire field.
 
-4. Klistra in matchlänken och skicka formuläret.
+### Tech Stack
 
-## Support för URL
+| Layer | Technology |
+|-------|-----------|
+| **Server** | Node.js + Express |
+| **Templating** | EJS |
+| **Scraping** | Puppeteer Extra + Stealth Plugin |
+| **HTML Parsing** | Cheerio |
+| **HTTP** | Axios |
+| **UI** | Custom CSS (glassmorphism, neon gradients, animations) |
 
-Du kan klistra in en matchlänk som:
+## ⚙️ Configuration
 
-`https://portal.ipscess.org/portal/match/bfea5009-6381-4e7e-972a-e51adfb0a33c`
+| Environment Variable | Default | Description |
+|---------------------|---------|-------------|
+| `PORT` | `5000` | Server port |
 
-## Tidigare Python-prototyp
+## 🤝 Contributing
 
-Det finns fortfarande ett Python-skript i `src/` från den tidigare MVP:n, men huvudappen körs nu i Node.
+Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feature/amazing-feature`)
+3. Commit your changes (`git commit -m 'Add amazing feature'`)
+4. Push to the branch (`git push origin feature/amazing-feature`)
+5. Open a Pull Request
+
+## 📋 Roadmap
+
+- [ ] Export results to CSV/PDF
+- [ ] Match comparison (compare two match URLs)
+- [ ] Shooter search across matches
+- [ ] Dark/light theme toggle
+- [ ] Docker container support
+- [ ] Persistent result storage (SQLite)
+
+## 📄 License
+
+This project is licensed under the MIT License — see the [LICENSE](LICENSE) file for details.
+
+## 🙏 Acknowledgments
+
+- [ESSPortal](https://portal.ipscess.org/) — IPSC Electronic Scoring System
+- [Puppeteer](https://pptr.dev/) — Headless browser automation
+- [Cheerio](https://cheerio.js.org/) — Fast HTML parsing
+
+---
+
+<div align="center">
+
+**Built with ☕ and 🎯 for the IPSC community**
+
+</div>
