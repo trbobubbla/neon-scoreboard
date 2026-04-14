@@ -732,6 +732,7 @@ app.get("/division", async (req, res) => {
       divisionLinks: overview.divisionLinks,
       selectedView: "division",
       sectionTitle: divisionName,
+      divisionUrl,
       error: null,
       records: filterOutSourceUrl(records),
       summary,
@@ -850,6 +851,98 @@ app.get("/combined", async (req, res) => {
 });
 
 const port = process.env.PORT || 5000;
+
+// --- CSV Export ---
+app.get("/export/csv", (req, res) => {
+  const matchUrl = req.query.matchUrl;
+  const view = req.query.view; // "combined" or division name
+  if (!matchUrl || !preloadedResults[matchUrl]) {
+    return res.status(400).send("No data available. Load a match first.");
+  }
+
+  let records = [];
+  let filename = "results";
+
+  if (view === "combined" && preloadedResults[matchUrl].stageData) {
+    records = preloadedResults[matchUrl].stageData;
+    filename = "combined";
+  } else if (preloadedResults[matchUrl].data && preloadedResults[matchUrl].data[view]) {
+    records = filterOutSourceUrl(preloadedResults[matchUrl].data[view]);
+    filename = view.replace(/\s+/g, '_').toLowerCase();
+  } else {
+    return res.status(404).send("No data for that view.");
+  }
+
+  if (records.length === 0) {
+    return res.status(404).send("No records.");
+  }
+
+  const columns = Object.keys(records[0]);
+  const escapeCsv = (val) => {
+    const str = String(val == null ? '' : val);
+    return str.includes(',') || str.includes('"') || str.includes('\n')
+      ? '"' + str.replace(/"/g, '""') + '"'
+      : str;
+  };
+  const csvLines = [columns.map(escapeCsv).join(',')];
+  for (const row of records) {
+    csvLines.push(columns.map(col => escapeCsv(row[col])).join(','));
+  }
+
+  const matchTitle = (preloadedResults[matchUrl].title || 'match').replace(/[^a-zA-Z0-9]/g, '_');
+  res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+  res.setHeader('Content-Disposition', `attachment; filename="${matchTitle}_${filename}.csv"`);
+  res.send('\uFEFF' + csvLines.join('\n'));
+});
+
+// --- Shooter Search ---
+app.get("/search", (req, res) => {
+  const matchUrl = req.query.matchUrl;
+  const query = (req.query.q || '').trim().toLowerCase();
+
+  if (!matchUrl || !preloadedResults[matchUrl] || !query) {
+    return res.json([]);
+  }
+
+  const results = [];
+  const data = preloadedResults[matchUrl].data || {};
+
+  for (const [divName, records] of Object.entries(data)) {
+    for (const record of records) {
+      const nameKey = Object.keys(record).find(k => /shooter|name|competitor/i.test(k) && k !== 'shooter_link');
+      const name = nameKey ? String(record[nameKey]).toLowerCase() : '';
+      const num = record['#'] ? String(record['#']) : '';
+
+      if (name.includes(query) || num === query) {
+        results.push({
+          '#': num,
+          name: nameKey ? record[nameKey] : '',
+          division: divName,
+          place: record['Place'] || record['Overall Place'] || '',
+          score: record['Score %'] || record['Total Score'] || '',
+        });
+      }
+    }
+  }
+
+  // Also search combined if available
+  if (preloadedResults[matchUrl].stageData) {
+    for (const record of preloadedResults[matchUrl].stageData) {
+      const name = String(record['Shooter'] || '').toLowerCase();
+      const num = String(record['#'] || '');
+      if (name.includes(query) || num === query) {
+        const existing = results.find(r => r['#'] === num);
+        if (existing) {
+          existing.combinedPlace = record['Overall Place'];
+          existing.matchPct = record['Match %'];
+        }
+      }
+    }
+  }
+
+  res.json(results);
+});
+
 const server = app.listen(port, () => {
   console.log(`ESSPortal web app körs på http://127.0.0.1:${port}`);
 });

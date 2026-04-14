@@ -105,6 +105,15 @@ This produces **accurate cross-division combined results** that truly reflect ea
 |---------------------|---------|-------------|
 | `PORT` | `5000` | Server port |
 
+### 🐳 Docker
+
+```bash
+docker build -t neon-scoreboard .
+docker run -p 3000:3000 neon-scoreboard
+```
+
+Then open [http://localhost:3000](http://localhost:3000).
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
@@ -117,11 +126,12 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 
 ## 📋 Roadmap
 
-- [ ] Export results to CSV/PDF
+- [x] Export results to CSV
+- [ ] Export results to PDF
 - [ ] Match comparison (compare two match URLs)
-- [ ] Shooter search across matches
-- [ ] Dark/light theme toggle
-- [ ] Docker container support
+- [x] Shooter search / table filter
+- [x] Dark/light theme toggle
+- [x] Docker container support
 - [ ] Persistent result storage (SQLite)
 
 ## 📄 License

@@ -1,0 +1,15 @@
+node_modules
+npm-debug.log
+debug-*.html
+debug-*.txt
+temp-*.html
+.git
+.gitignore
+.vscode
+.idea
+*.md
+LICENSE
+CONTRIBUTING.md
+SECURITY.md
+.github
+.editorconfig
