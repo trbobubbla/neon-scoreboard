@@ -140,10 +140,15 @@ const fetchMatchOverview = async (url) => {
   });
 
   const $ = cheerio.load(response.data);
-  const title = $("h1").first().text().trim() || url;
+  const title = $("h1").first().text().trim();
   const divisionLinks = extractDivisionLinks($, url);
+
+  if (!title && divisionLinks.length === 0) {
+    throw new Error("Matchen hittades inte. Kontrollera att URL:en är korrekt och att resultat finns publicerade.");
+  }
+
   const verifyUrl = url + '/verify';
-  return { title, divisionLinks, verifyUrl };
+  return { title: title || url, divisionLinks, verifyUrl };
 };
 
 const launchBrowser = async () => {
