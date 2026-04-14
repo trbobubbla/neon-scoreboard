@@ -1,10 +1,15 @@
 import argparse
 import json
-import os
 import sys
 from pathlib import Path
 
 import pandas as pd
+import requests
+from bs4 import BeautifulSoup
+
+
+def is_url(path: str) -> bool:
+    return path.startswith("http://") or path.startswith("https://")
 
 
 def load_file(path: Path) -> pd.DataFrame:
@@ -14,6 +19,47 @@ def load_file(path: Path) -> pd.DataFrame:
     if suffix == ".json":
         return pd.read_json(path, orient="records")
     raise ValueError(f"Stöds inte filtyp: {path}")
+
+
+def load_url(url: str) -> pd.DataFrame:
+    response = requests.get(url, timeout=15, headers={"User-Agent": "ESSPortalReport/1.0"})
+    response.raise_for_status()
+
+    content_type = response.headers.get("Content-Type", "")
+    if "application/json" in content_type:
+        payload = response.json()
+        if isinstance(payload, list):
+            return pd.DataFrame(payload)
+        if isinstance(payload, dict):
+            return pd.json_normalize(payload)
+
+    soup = BeautifulSoup(response.text, "html.parser")
+
+    table = soup.find("table")
+    if table:
+        return pd.read_html(str(table))[0]
+
+    definition_list = soup.find("dl")
+    if definition_list:
+        rows = []
+        terms = definition_list.find_all("dt")
+        descriptions = definition_list.find_all("dd")
+        for term, desc in zip(terms, descriptions):
+            rows.append({"field": term.get_text(strip=True), "value": desc.get_text(strip=True)})
+        return pd.DataFrame(rows)
+
+    key_values = []
+    for row in soup.find_all(["p", "li"]):
+        text = row.get_text(separator=" ", strip=True)
+        if ":" in text:
+            key, value = text.split(":", 1)
+            key_values.append({"field": key.strip(), "value": value.strip()})
+
+    if key_values:
+        return pd.DataFrame(key_values)
+
+    title = soup.title.string.strip() if soup.title else url
+    return pd.DataFrame([{"field": "title", "value": title}, {"field": "url", "value": url}])
 
 
 def normalize_dataframe(df: pd.DataFrame) -> pd.DataFrame:
@@ -44,12 +90,17 @@ def summarize(df: pd.DataFrame) -> dict:
     return result
 
 
-def merge_inputs(inputs: list[Path]) -> pd.DataFrame:
+def merge_inputs(inputs: list[str]) -> pd.DataFrame:
     frames = []
     for input_path in inputs:
-        df = load_file(input_path)
+        if is_url(input_path):
+            df = load_url(input_path)
+            df["source_url"] = input_path
+        else:
+            path = Path(input_path)
+            df = load_file(path)
+            df["source_file"] = path.name
         df = normalize_dataframe(df)
-        df["source_file"] = input_path.name
         frames.append(df)
     if not frames:
         raise ValueError("Ingen inputfil angiven.")
@@ -75,7 +126,7 @@ def write_summary(summary: dict, output_path: Path) -> None:
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Sammanställ ESSPortal-matcher och statistik.")
-    parser.add_argument("--input", "-i", nargs="+", required=True, help="En eller flera sambandade inputfiler (CSV eller JSON).")
+    parser.add_argument("--input", "-i", nargs="+", required=True, help="En eller flera sambandade inputfiler (CSV, JSON eller URL).")
     parser.add_argument("--output", "-o", required=True, help="Utdatafil för den kombinerade listan (CSV eller JSON).")
     parser.add_argument("--summary", "-s", default="results/summary.json", help="Fil för sammanfattande statistik.")
     return parser.parse_args()
@@ -83,14 +134,13 @@ def parse_args() -> argparse.Namespace:
 
 def main() -> int:
     args = parse_args()
-    input_paths = [Path(path) for path in args.input]
 
-    for path in input_paths:
-        if not path.exists():
+    for path in args.input:
+        if not is_url(path) and not Path(path).exists():
             print(f"Filen finns inte: {path}", file=sys.stderr)
             return 1
 
-    combined = merge_inputs(input_paths)
+    combined = merge_inputs(args.input)
     write_output(combined, Path(args.output))
     summary = summarize(combined)
     write_summary(summary, Path(args.summary))

@@ -18,7 +18,11 @@ Det här repot innehåller verktyg för att sammanställa och aggregera ESSPorta
 ## Exempel
 
 ```powershell
-python src/summarize_matches.py --input data/match1.csv data/match2.json --output results/combined.json
+python src/summarize_matches.py --input data/match1.csv data/match2.json --output results/combined.json --summary results/summary.json
+```
+
+```powershell
+python src/summarize_matches.py --input https://portal.ipscess.org/portal/match/bfea5009-6381-4e7e-972a-e51adfb0a33c --output results/combined.json --summary results/summary.json
 ```
 
 ## Installation
