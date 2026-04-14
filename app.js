@@ -91,17 +91,25 @@ const parseHtmlTable = (table, $) => {
   return records;
 };
 
-const parseKeyValueList = ($, selector) => {
-  const records = [];
-  $(selector).each((_, node) => {
-    const text = $(node).text().trim();
-    const parts = text.split(":");
-    if (parts.length >= 2) {
-      const field = parts.shift().trim();
-      records.push({ field, value: parts.join(":").trim() });
+// Extract stage name from preceding heading element, stripping division prefix
+const findStageName = ($, $table, fallbackIndex) => {
+  let stageName = null;
+  let el = $table.prev();
+  for (let i = 0; i < 5 && el.length; i++) {
+    const tag = el.prop('tagName');
+    if (tag && /^H[1-6]$/.test(tag)) { stageName = el.text().trim(); break; }
+    el = el.prev();
+  }
+  if (!stageName) {
+    el = $table.parent().prev();
+    for (let i = 0; i < 5 && el.length; i++) {
+      const tag = el.prop('tagName');
+      if (tag && /^H[1-6]$/.test(tag)) { stageName = el.text().trim(); break; }
+      el = el.prev();
     }
-  });
-  return records;
+  }
+  if (!stageName) stageName = `Stage ${fallbackIndex + 1}`;
+  return stageName.replace(/^.+?\s*-\s*/, '').trim();
 };
 
 const getRelativePath = (url) => {
@@ -197,13 +205,6 @@ const fetchDivisionData = async (matchUrl, divisionName, divisionUrl, divisionRe
     const html = await page.content();
     const $ = cheerio.load(html);
 
-    // Save first division HTML for debugging
-    const fs = require('fs');
-    if (!fs.existsSync(path.join(__dirname, 'debug-division-first.html'))) {
-      fs.writeFileSync(path.join(__dirname, 'debug-division-first.html'), html, 'utf8');
-      console.log(`Saved first division debug HTML for ${divisionName}`);
-    }
-
     const table = $("table").first();
     let records = [];
     const shooterIds = new Set();
@@ -258,23 +259,7 @@ const fetchDivisionData = async (matchUrl, divisionName, divisionUrl, divisionRe
             const stageRecords = parseHtmlTable($stageTable, $s);
             if (stageRecords.length === 0) return;
 
-            let stageName = null;
-            let el = $stageTable.prev();
-            for (let i = 0; i < 5 && el.length; i++) {
-              const tag = el.prop('tagName');
-              if (tag && /^H[1-6]$/.test(tag)) { stageName = el.text().trim(); break; }
-              el = el.prev();
-            }
-            if (!stageName) {
-              el = $stageTable.parent().prev();
-              for (let i = 0; i < 5 && el.length; i++) {
-                const tag = el.prop('tagName');
-                if (tag && /^H[1-6]$/.test(tag)) { stageName = el.text().trim(); break; }
-                el = el.prev();
-              }
-            }
-            if (!stageName) stageName = `Stage ${idx + 1}`;
-            stageName = stageName.replace(/^.+?\s*-\s*/, '').trim();
+            const stageName = findStageName($s, $stageTable, idx);
             stageDataForDiv.push({ stageName, divisionName, records: stageRecords });
           });
           console.log(`Stage data for ${divisionName}: ${stageDataForDiv.length} stages`);
@@ -370,14 +355,6 @@ const fetchDivisionStageData = async (matchUrl, divisionName, divisionUrl, divis
     const html = await page.content();
     const $ = cheerio.load(html);
 
-    // Save debug HTML for first division
-    const fs = require('fs');
-    if (!fetchDivisionStageData._debugSaved) {
-      fs.writeFileSync(path.join(__dirname, 'debug-stage-first.html'), html, 'utf8');
-      fetchDivisionStageData._debugSaved = true;
-      console.log(`Saved stage debug HTML for ${divisionName}`);
-    }
-
     // Parse stage data - the page should have multiple tables, one per stage
     // Each stage has a heading (h2/h3/h4) followed by a table
     const stages = [];
@@ -393,35 +370,7 @@ const fetchDivisionStageData = async (matchUrl, divisionName, divisionUrl, divis
       const records = parseHtmlTable($table, $);
       if (records.length === 0) return;
 
-      // Try to find a stage name from a preceding heading
-      let stageName = null;
-      let el = $table.prev();
-      for (let i = 0; i < 5 && el.length; i++) {
-        const tag = el.prop('tagName');
-        if (tag && /^H[1-6]$/.test(tag)) {
-          stageName = el.text().trim();
-          break;
-        }
-        el = el.prev();
-      }
-      // Also check parent's preceding siblings
-      if (!stageName) {
-        el = $table.parent().prev();
-        for (let i = 0; i < 5 && el.length; i++) {
-          const tag = el.prop('tagName');
-          if (tag && /^H[1-6]$/.test(tag)) {
-            stageName = el.text().trim();
-            break;
-          }
-          el = el.prev();
-        }
-      }
-      if (!stageName) stageName = `Stage ${idx + 1}`;
-
-      // Normalize stage name: strip division prefix (e.g., "Production - Stage 01" -> "Stage 01")
-      // This is critical so the same physical stage across divisions gets the same key
-      // for cross-division HF comparison
-      stageName = stageName.replace(/^.+?\s*-\s*/, '').trim();
+      const stageName = findStageName($, $table, idx);
 
       stages.push({ stageName, divisionName, records });
     });
@@ -443,69 +392,6 @@ const fetchDivisionStageData = async (matchUrl, divisionName, divisionUrl, divis
     if (page) await page.close();
     await browser.close();
   }
-};
-
-const fetchMatchData = async (url) => {
-  const response = await axios.get(url, {
-    headers: { "User-Agent": "ESSPortalReport/1.0" },
-    timeout: 30000,
-    responseEncoding: 'utf-8',
-  });
-
-  const contentType = response.headers["content-type"] || "";
-  if (contentType.includes("application/json")) {
-    const payload = response.data;
-    if (Array.isArray(payload)) {
-      return payload;
-    }
-    if (typeof payload === "object" && payload !== null) {
-      return [payload];
-    }
-  }
-
-  const $ = cheerio.load(response.data);
-  const divisionLinks = extractDivisionLinks($, url);
-  if (divisionLinks.length && !url.includes("/result/")) {
-    let allRecords = [];
-    for (const division of divisionLinks) {
-      const divisionRecords = await fetchDivisionData(division.url, division.name);
-      allRecords = allRecords.concat(divisionRecords);
-    }
-    return allRecords;
-  }
-
-  const table = $("table").first();
-  if (table.length) {
-    const records = parseHtmlTable(table, $);
-    if (records.length) {
-      return records;
-    }
-  }
-
-  const dl = $("dl").first();
-  if (dl.length) {
-    const terms = dl.find("dt");
-    const descs = dl.find("dd");
-    const records = [];
-    terms.each((index, term) => {
-      const field = $(term).text().trim();
-      const value = $(descs.get(index)).text().trim();
-      records.push({ field, value });
-    });
-    if (records.length) {
-      return records;
-    }
-  }
-
-  const records = parseKeyValueList($, "p").concat(parseKeyValueList($, "li"));
-  if (records.length) {
-    return records;
-  }
-
-  return [
-    { field: "title", value: $("title").text().trim() || url },
-    { field: "url", value: url },
-  ];
 };
 
 const preloadedResults = {};
@@ -562,6 +448,31 @@ const deleteMatchFromDb = (url) => {
   });
   transaction();
   return true;
+};
+
+const buildShooterLookup = (divisionData) => {
+  const lookup = {};
+  if (!divisionData) return lookup;
+  for (const [divName, records] of Object.entries(divisionData)) {
+    for (const record of records) {
+      const numCol = record['#'];
+      const nameKey = Object.keys(record).find((k) => /shooter|name|competitor/i.test(k) && k !== 'shooter_link');
+      const id = numCol ? String(numCol).trim() : null;
+      if (id && /^\d+$/.test(id)) {
+        lookup[id] = {
+          name: nameKey ? record[nameKey] : '',
+          division: record.division || divName,
+          category: record['Category'] || '',
+          class: record['Class'] || '',
+          factor: record['Factor'] || '',
+          region: record['Region'] || '',
+          pom: record['POM'] || '',
+          totalTime: record['Total Time'] || '',
+        };
+      }
+    }
+  }
+  return lookup;
 };
 
 const filterOutSourceUrl = (records) => {
@@ -933,28 +844,7 @@ app.get("/combined", async (req, res) => {
     } else if (preloadedResults[matchUrl] && preloadedResults[matchUrl].allStageResults && preloadedResults[matchUrl].allStageResults.length > 0) {
       // Use cached stage data from preload to calculate combined
       console.log(`Using cached stage data from preload to calculate combined...`);
-      const shooterLookup = {};
-      if (preloadedResults[matchUrl].data) {
-        for (const [divName, records] of Object.entries(preloadedResults[matchUrl].data)) {
-          for (const record of records) {
-            const numCol = record['#'];
-            const nameKey = Object.keys(record).find((k) => /shooter|name|competitor/i.test(k) && k !== 'shooter_link');
-            const id = numCol ? String(numCol).trim() : null;
-            if (id && /^\d+$/.test(id)) {
-              shooterLookup[id] = {
-                name: nameKey ? record[nameKey] : '',
-                division: record.division || divName,
-                category: record['Category'] || '',
-                class: record['Class'] || '',
-                factor: record['Factor'] || '',
-                region: record['Region'] || '',
-                pom: record['POM'] || '',
-                totalTime: record['Total Time'] || '',
-              };
-            }
-          }
-        }
-      }
+      const shooterLookup = buildShooterLookup(preloadedResults[matchUrl].data);
       allRecords = calculateCombinedFromStages(preloadedResults[matchUrl].allStageResults, shooterLookup);
       if (allRecords.length > 0) {
         preloadedResults[matchUrl].stageData = allRecords;
@@ -970,33 +860,8 @@ app.get("/combined", async (req, res) => {
       const divisions = preloadedResults[matchUrl].divisionLinks;
       console.log(`Fetching stage data for ${divisions.length} divisions in parallel...`);
 
-      // Build shooter lookup from preloaded division data
-      const shooterLookup = {};
-      if (preloadedResults[matchUrl].data) {
-        for (const [divName, records] of Object.entries(preloadedResults[matchUrl].data)) {
-          for (const record of records) {
-            const numCol = record['#'];
-            const nameKey = Object.keys(record).find((k) => /shooter|name|competitor/i.test(k) && k !== 'shooter_link');
-            const id = numCol ? String(numCol).trim() : null;
-            if (id && /^\d+$/.test(id)) {
-              shooterLookup[id] = {
-                name: nameKey ? record[nameKey] : '',
-                division: record.division || divName,
-                category: record['Category'] || '',
-                class: record['Class'] || '',
-                factor: record['Factor'] || '',
-                region: record['Region'] || '',
-                pom: record['POM'] || '',
-                totalTime: record['Total Time'] || '',
-              };
-            }
-          }
-        }
-      }
+      const shooterLookup = buildShooterLookup(preloadedResults[matchUrl].data);
       console.log(`Shooter lookup: ${Object.keys(shooterLookup).length} entries`);
-
-      // Reset debug flag
-      fetchDivisionStageData._debugSaved = false;
 
       // Fetch stage view for each division in parallel
       const stageResults = await Promise.all(
