@@ -1071,12 +1071,14 @@ app.get("/api/shooter", (req, res) => {
     stageResults = preloadedResults[matchUrl].allStageResults;
   }
 
-  // If empty, try loading from SQLite raw stage data (not available in current schema, use division data)
   if (stageResults.length === 0) {
     return res.json({ error: "No stage data available. Reload the match first." });
   }
 
+  const parseNum = (v) => parseFloat(String(v || '').replace(/[^0-9.\-]/g, '')) || 0;
   const stages = [];
+  let totalPoints = 0, totalTime = 0, stageCount = 0;
+
   for (const stage of stageResults) {
     const cols = Object.keys(stage.records[0] || {});
     const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
@@ -1085,22 +1087,38 @@ app.get("/api/shooter", (req, res) => {
     for (const record of stage.records) {
       const sid = String(record[numKey] || '').trim();
       if (sid === shooterId) {
-        const filtered = {};
-        for (const [key, val] of Object.entries(record)) {
-          if (key === 'shooter_link' || key === 'source_url') continue;
-          filtered[key] = val;
-        }
+        const points = parseNum(record['Points']);
+        const time = parseNum(record['Time']);
+        const hf = parseNum(record['Hit Factor']);
+        const place = record['Place'] || '';
+        totalPoints += points;
+        totalTime += time;
+        stageCount++;
         stages.push({
           stage: stage.stageName,
           division: stage.divisionName,
-          data: filtered,
+          place,
+          points,
+          time,
+          hf,
         });
         break;
       }
     }
   }
 
-  return res.json({ shooterId, stages });
+  const avgHF = stageCount > 0 && totalTime > 0 ? (totalPoints / totalTime) : 0;
+
+  return res.json({
+    shooterId,
+    summary: {
+      stages: stageCount,
+      totalPoints: totalPoints.toFixed(0),
+      totalTime: totalTime.toFixed(2),
+      avgHF: avgHF.toFixed(4),
+    },
+    stages,
+  });
 });
 
 // --- CSV Export ---

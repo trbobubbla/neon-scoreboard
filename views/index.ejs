@@ -326,28 +326,35 @@
     .detail-loading {
       font-size: 0.85em; color: var(--text-muted); padding: 8px 0;
     }
-    .detail-stages {
-      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-      gap: 10px;
+    .detail-summary {
+      display: flex; gap: 24px; flex-wrap: wrap; margin-bottom: 14px;
     }
-    .stage-card {
-      border: 1px solid var(--border); border-radius: 10px;
-      padding: 12px 14px; background: var(--bg-primary);
+    .detail-stat {
+      display: flex; flex-direction: column; gap: 2px;
     }
-    .stage-card-name {
-      font-size: 0.8em; font-weight: 700; color: var(--accent);
-      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em;
+    .detail-stat-label {
+      font-size: 0.7em; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.05em; color: var(--text-muted);
     }
-    .stage-card-div {
-      font-size: 0.7em; color: var(--text-muted); font-weight: 500;
-      margin-bottom: 8px;
+    .detail-stat-value {
+      font-size: 1.15em; font-weight: 700; color: var(--text-primary);
     }
-    .stage-card-data {
-      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
-      font-size: 0.82em;
+    .detail-table {
+      width: 100%; border-collapse: collapse; font-size: 0.82em;
+      border: 1px solid var(--border); border-radius: 8px; overflow: hidden;
     }
-    .stage-card-data dt { color: var(--text-muted); font-weight: 500; }
-    .stage-card-data dd { color: var(--text-primary); font-weight: 600; text-align: right; }
+    .detail-table th, .detail-table td {
+      padding: 7px 12px; text-align: left; white-space: nowrap;
+      border-bottom: 1px solid var(--border);
+    }
+    .detail-table th {
+      background: var(--table-header-bg); color: var(--text-muted);
+      font-weight: 600; font-size: 0.85em; text-transform: uppercase;
+      letter-spacing: 0.03em;
+    }
+    .detail-table td { color: var(--text-primary); }
+    .detail-table tbody tr:last-child td { border-bottom: none; }
+    .detail-table tbody tr:hover { background: var(--row-hover); }
     .detail-empty {
       font-size: 0.85em; color: var(--text-muted); font-style: italic;
     }
@@ -361,7 +368,7 @@
       th, td { padding: 8px 10px; }
       .toolbar { flex-direction: column; }
       .topnav-inner { padding: 0; }
-      .detail-stages { grid-template-columns: 1fr; }
+      .detail-summary { gap: 16px; }
     }
   </style>
 </head>
@@ -596,27 +603,32 @@
       if (row) row.classList.remove('active');
     }
 
-    function renderStages(stages, container) {
-      if (!stages || stages.length === 0) {
+    function renderStages(data, container) {
+      if (!data.stages || data.stages.length === 0) {
         container.innerHTML = '<div class="detail-empty">No stage data available for this shooter.</div>';
         return;
       }
-      var skipKeys = ['#', 'Shooter', 'Name', 'Competitor', 'shooter_link', 'source_url'];
-      var html = '<div class="detail-stages">';
-      stages.forEach(function(s) {
-        html += '<div class="stage-card">';
-        html += '<div class="stage-card-name">' + escHtml(s.stage) + '</div>';
-        html += '<div class="stage-card-div">' + escHtml(s.division) + '</div>';
-        html += '<dl class="stage-card-data">';
-        Object.keys(s.data).forEach(function(key) {
-          if (skipKeys.indexOf(key) >= 0) return;
-          var val = s.data[key];
-          if (val === null || val === undefined || val === '') return;
-          html += '<dt>' + escHtml(key) + '</dt><dd>' + escHtml(String(val)) + '</dd>';
-        });
-        html += '</dl></div>';
-      });
+      var s = data.summary;
+      var html = '<div class="detail-summary">';
+      html += '<div class="detail-stat"><span class="detail-stat-label">Stages</span><span class="detail-stat-value">' + escHtml(String(s.stages)) + '</span></div>';
+      html += '<div class="detail-stat"><span class="detail-stat-label">Total Points</span><span class="detail-stat-value">' + escHtml(s.totalPoints) + '</span></div>';
+      html += '<div class="detail-stat"><span class="detail-stat-label">Total Time</span><span class="detail-stat-value">' + escHtml(s.totalTime) + 's</span></div>';
+      html += '<div class="detail-stat"><span class="detail-stat-label">Overall HF</span><span class="detail-stat-value">' + escHtml(s.avgHF) + '</span></div>';
       html += '</div>';
+      html += '<div style="overflow-x:auto"><table class="detail-table"><thead><tr>';
+      html += '<th>Stage</th><th>Division</th><th>Place</th><th>Points</th><th>Time</th><th>Hit Factor</th>';
+      html += '</tr></thead><tbody>';
+      data.stages.forEach(function(st) {
+        html += '<tr>';
+        html += '<td>' + escHtml(st.stage) + '</td>';
+        html += '<td>' + escHtml(st.division) + '</td>';
+        html += '<td>' + escHtml(String(st.place)) + '</td>';
+        html += '<td>' + escHtml(String(st.points)) + '</td>';
+        html += '<td>' + escHtml(String(st.time)) + 's</td>';
+        html += '<td>' + escHtml(String(st.hf)) + '</td>';
+        html += '</tr>';
+      });
+      html += '</tbody></table></div>';
       container.innerHTML = html;
     }
 
@@ -661,8 +673,8 @@
               body.innerHTML = '<div class="detail-empty">' + escHtml(data.error) + '</div>';
               return;
             }
-            detailCache[shooterId] = data.stages;
-            renderStages(data.stages, body);
+            detailCache[shooterId] = data;
+            renderStages(data, body);
           })
           .catch(function(err) {
             body.innerHTML = '<div class="detail-empty">Failed to load data.</div>';
