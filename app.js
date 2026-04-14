@@ -2,6 +2,10 @@ const express = require("express");
 const axios = require("axios");
 const cheerio = require("cheerio");
 const path = require("path");
+const puppeteer = require("puppeteer-extra");
+const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+
+puppeteer.use(StealthPlugin());
 
 const app = express();
 app.set("view engine", "ejs");
@@ -90,79 +94,50 @@ const fetchMatchOverview = async (url) => {
   return { title, divisionLinks };
 };
 
-const fetchDivisionData = async (url, divisionName) => {
-  try {
-    const response = await axios.get(url, {
-      headers: { "User-Agent": "ESSPortalReport/1.0" },
-      timeout: 15000,
-      maxRedirects: 0,
-      validateStatus: (status) => status >= 200 && status < 400,
-    });
-
-    const $ = cheerio.load(response.data);
-    const table = $("table").first();
-    if (table.length) {
-      const records = parseHtmlTable(table, $).map((record) => ({
-        division: divisionName,
-        source_url: url,
-        ...record,
-      }));
-      if (records.length) {
-        return records;
-      }
-    }
-
-    const hasCaptcha = $("#captcha-form").length > 0 || $("input[name='g-recaptcha-response']").length > 0;
-    if (hasCaptcha) {
-      return [
-        {
-          division: divisionName,
-          source_url: url,
-          note: "Resultat är blockerade av reCAPTCHA och kan inte hämtas automatiskt.",
-        },
-      ];
-    }
-  } catch (error) {
-    return [
-      {
-        division: divisionName,
-        source_url: url,
-        note: `Kunde inte hämta divisionen: ${error.message}`,
-      },
-    ];
-  }
-
-  return [
-    {
-      division: divisionName,
-      source_url: url,
-      note: "Ingen tabell hittades på divisionsresultatsidan.",
-    },
-  ];
+const launchBrowser = async () => {
+  return await puppeteer.launch({
+    headless: true,
+    args: ["--no-sandbox", "--disable-setuid-sandbox", "--disable-dev-shm-usage"],
+  });
 };
 
-const fetchDivisionDataWithToken = async (url, divisionName, token, referer) => {
+const fetchDivisionData = async (matchUrl, divisionName, divisionUrl) => {
+  const browser = await launchBrowser();
+  let page;
+
   try {
-    const body = new URLSearchParams();
-    body.append("g-recaptcha-response", token);
-
-    const response = await axios.post(url, body.toString(), {
-      headers: {
-        "User-Agent": "ESSPortalReport/1.0",
-        "Content-Type": "application/x-www-form-urlencoded",
-        Referer: referer,
+    page = await browser.newPage();
+    await page.setUserAgent(
+      "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+    );
+    await page.goto(matchUrl, { waitUntil: "networkidle2", timeout: 60000 });
+    await page.waitForFunction(
+      (url) => {
+        return Array.from(document.querySelectorAll(".list-group-item")).some((el) => {
+          return el.getAttribute("onclick") && el.getAttribute("onclick").includes(url);
+        });
       },
-      timeout: 15000,
-      maxRedirects: 0,
-      validateStatus: (status) => status >= 200 && status < 400,
-    });
+      { timeout: 30000 },
+      divisionUrl
+    );
 
-    const $ = cheerio.load(response.data);
+    const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => null);
+    await page.evaluate((url) => {
+      if (typeof window.submitRecaptcha !== "function") {
+        throw new Error("submitRecaptcha saknas på portal-sidan");
+      }
+      window.submitRecaptcha(url, "captcha-form");
+    }, divisionUrl);
+    await navigationPromise;
+    await page.waitForTimeout(2000);
+
+    const html = await page.content();
+    const $ = cheerio.load(html);
     const table = $("table").first();
     if (table.length) {
       const records = parseHtmlTable(table, $).map((record) => ({
         division: divisionName,
-        source_url: url,
+        source_url: divisionUrl,
         ...record,
       }));
       if (records.length) {
@@ -170,40 +145,34 @@ const fetchDivisionDataWithToken = async (url, divisionName, token, referer) => 
       }
     }
 
-    const hasCaptcha = $("#captcha-form").length > 0 || $("input[name='g-recaptcha-response']").length > 0;
-    if (hasCaptcha) {
-      return [
-        {
-          division: divisionName,
-          source_url: url,
-          note: "Resultat är blockerade av reCAPTCHA och på nytt kräver lösenord.",
-        },
-      ];
-    }
+    return [
+      {
+        division: divisionName,
+        source_url: divisionUrl,
+        note: "Kunde inte hitta divisionsresultat efter att ha laddat sidan.",
+      },
+    ];
   } catch (error) {
     return [
       {
         division: divisionName,
-        source_url: url,
-        note: `Kunde inte hämta divisionen: ${error.message}`,
+        source_url: divisionUrl,
+        note: `Browserhämtning misslyckades: ${error.message}`,
       },
     ];
+  } finally {
+    if (page) {
+      await page.close();
+    }
+    await browser.close();
   }
-
-  return [
-    {
-      division: divisionName,
-      source_url: url,
-      note: "Ingen tabell hittades på divisionsresultatsidan.",
-    },
-  ];
 };
 
 const fetchCombinedResults = async (matchUrl) => {
   const overview = await fetchMatchOverview(matchUrl);
   let allRecords = [];
   for (const division of overview.divisionLinks) {
-    const records = await fetchDivisionData(division.url, division.name);
+    const records = await fetchDivisionData(matchUrl, division.name, division.url);
     allRecords = allRecords.concat(records);
   }
   return { title: overview.title, divisionLinks: overview.divisionLinks, records: allRecords };
@@ -351,8 +320,6 @@ app.post("/", async (req, res) => {
   }
 });
 
-const RECAPTCHA_SITE_KEY = "6Lf0_jorAAAAAMo3ysY2PrFDa1cBGeQ6GhTJMAZj";
-
 app.get("/division", async (req, res) => {
   const matchUrl = req.query.matchUrl;
   const divisionUrl = req.query.divisionUrl;
@@ -364,33 +331,7 @@ app.get("/division", async (req, res) => {
 
   try {
     const overview = await fetchMatchOverview(matchUrl);
-    return res.render("division", {
-      matchUrl,
-      divisionUrl,
-      divisionName,
-      matchTitle: overview.title,
-      divisionLinks: overview.divisionLinks,
-      recaptchaSiteKey: RECAPTCHA_SITE_KEY,
-      error: null,
-    });
-  } catch (error) {
-    return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: error.message, records: null, summary: null });
-  }
-});
-
-app.post("/division/fetch", async (req, res) => {
-  const matchUrl = req.body.matchUrl;
-  const divisionUrl = req.body.divisionUrl;
-  const divisionName = req.body.divisionName || "Division";
-  const token = req.body["g-recaptcha-response"];
-
-  if (!matchUrl || !divisionUrl || !token || !isUrl(matchUrl) || !isUrl(divisionUrl)) {
-    return res.redirect("/");
-  }
-
-  try {
-    const overview = await fetchMatchOverview(matchUrl);
-    const records = await fetchDivisionDataWithToken(divisionUrl, divisionName, token, matchUrl);
+    const records = await fetchDivisionData(matchUrl, divisionName, divisionUrl);
     const summary = summarizeRecords(records);
     return res.render("index", {
       matchUrl,
