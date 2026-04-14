@@ -779,7 +779,13 @@ const calculateCombinedFromStages = (allDivisionStages, shooterLookup) => {
       "Overall Place": rank,
       "#": entry.shooterId,
       "Shooter": entry.lookup.name,
+      "Category": entry.lookup.category || '',
+      "Class": entry.lookup.class || '',
+      "Factor": entry.lookup.factor || '',
       "Division": entry.lookup.division,
+      "Region": entry.lookup.region || '',
+      "POM": entry.lookup.pom || '',
+      "Total Time": entry.lookup.totalTime || '',
       "Match Pts": entry.totalPts.toFixed(2),
       "Match %": entry.matchPct.toFixed(2) + '%',
       "Stages": entry.stageCount,
@@ -931,6 +937,12 @@ app.get("/combined", async (req, res) => {
               shooterLookup[id] = {
                 name: nameKey ? record[nameKey] : '',
                 division: record.division || divName,
+                category: record['Category'] || '',
+                class: record['Class'] || '',
+                factor: record['Factor'] || '',
+                region: record['Region'] || '',
+                pom: record['POM'] || '',
+                totalTime: record['Total Time'] || '',
               };
             }
           }
@@ -963,6 +975,12 @@ app.get("/combined", async (req, res) => {
               shooterLookup[id] = {
                 name: nameKey ? record[nameKey] : '',
                 division: record.division || divName,
+                category: record['Category'] || '',
+                class: record['Class'] || '',
+                factor: record['Factor'] || '',
+                region: record['Region'] || '',
+                pom: record['POM'] || '',
+                totalTime: record['Total Time'] || '',
               };
             }
           }
