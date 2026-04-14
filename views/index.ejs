@@ -441,8 +441,8 @@
           <input type="text" class="search-box" id="tableSearch" placeholder="Filter results..." autocomplete="off">
           <div class="search-results" id="searchResults"></div>
         </div>
-        <a class="toolbar-btn" href="/export/csv?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">CSV</a>
-        <a class="toolbar-btn" href="/export/pdf?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">PDF</a>
+        <a class="toolbar-btn" href="/export/csv?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView === 'combined' ? 'combined' : encodeURIComponent(sectionTitle) %>">CSV</a>
+        <a class="toolbar-btn" href="/export/pdf?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView === 'combined' ? 'combined' : encodeURIComponent(sectionTitle) %>">PDF</a>
       </div>
       <div class="result-meta"><%= records.length %> competitors</div>
       <div class="table-wrap">
