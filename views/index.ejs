@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="sv">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ESSPortal Matchrapport</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 24px; background: #f4f7fb; color: #0f172a; }
+    .container { max-width: 980px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,0.08); }
+    label { display: block; margin-bottom: 8px; font-weight: 600; }
+    input[type=url] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 16px; }
+    button { background: #2563eb; color: #fff; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; }
+    button:hover { background: #1d4ed8; }
+    .alert { border-radius: 10px; padding: 16px; margin: 18px 0; }
+    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
+    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
+    th, td { border: 1px solid #e2e8f0; padding: 12px; }
+    th { background: #f8fafc; text-align: left; }
+    .summary-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 16px; }
+    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>ESSPortal Matchrapport</h1>
+    <p>Ange matchlänken och tryck <strong>Hämta match</strong>.</p>
+
+    <form method="post">
+      <label for="match_url">Matchlänk</label>
+      <input id="match_url" name="match_url" type="url" placeholder="https://portal.ipscess.org/portal/match/..." value="<%= matchUrl %>" required>
+      <button type="submit">Hämta match</button>
+    </form>
+
+    <% if (error) { %>
+      <div class="alert alert-error"><%= error %></div>
+    <% } %>
+
+    <% if (summary) { %>
+      <h2>Sammanfattning</h2>
+      <div class="summary-grid">
+        <div class="card"><strong>Rader</strong><div><%= summary.row_count %></div></div>
+        <div class="card"><strong>Kolumner</strong><div><%= summary.columns.length %></div></div>
+        <% if (summary.unique_matches !== undefined) { %>
+          <div class="card"><strong>Unika matcher</strong><div><%= summary.unique_matches %></div></div>
+        <% } %>
+      </div>
+
+      <% if (Object.keys(summary.stats).length) { %>
+        <h3>Numerisk statistik</h3>
+        <table>
+          <thead>
+            <tr><th>Fält</th><th>Antal</th><th>Medel</th><th>Min</th><th>Max</th></tr>
+          </thead>
+          <tbody>
+            <% for (const [field, stats] of Object.entries(summary.stats)) { %>
+              <tr>
+                <td><%= field %></td>
+                <td><%= stats.count %></td>
+                <td><%= stats.mean.toFixed(2) %></td>
+                <td><%= stats.min %></td>
+                <td><%= stats.max %></td>
+              </tr>
+            <% } %>
+          </tbody>
+        </table>
+      <% } %>
+
+      <% if (records && records.length) { %>
+        <h2>Data</h2>
+        <table>
+          <thead>
+            <tr>
+              <% Object.keys(records[0]).forEach((key) => { %>
+                <th><%= key %></th>
+              <% }); %>
+            </tr>
+          </thead>
+          <tbody>
+            <% records.forEach((row) => { %>
+              <tr>
+                <% Object.values(row).forEach((value) => { %>
+                  <td><%= value %></td>
+                <% }); %>
+              </tr>
+            <% }); %>
+          </tbody>
+        </table>
+      <% } %>
+    <% } %>
+  </div>
+</body>
+</html>
