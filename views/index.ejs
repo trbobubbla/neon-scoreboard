@@ -213,9 +213,7 @@
     tbody tr:nth-child(even) {
       background: var(--row-even);
     }
-    .stats-table {
-      font-size: 0.9em;
-    }
+
     .preload-badge {
       display: inline-block;
       background: linear-gradient(135deg, #00ff88, #00d4ff);
@@ -439,26 +437,6 @@
         <% } %>
       </div>
 
-      <% if (selectedView === 'combined' && Object.keys(summary.stats).length) { %>
-        <h3>Performance Metrics</h3>
-        <table class="stats-table">
-          <thead>
-            <tr><th>Field</th><th>Count</th><th>Mean</th><th>Min</th><th>Max</th></tr>
-          </thead>
-          <tbody>
-            <% for (const [field, stats] of Object.entries(summary.stats)) { %>
-              <tr>
-                <td><%= field %></td>
-                <td><%= stats.count %></td>
-                <td><%= stats.mean.toFixed(2) %></td>
-                <td><%= stats.min %></td>
-                <td><%= stats.max %></td>
-              </tr>
-            <% } %>
-          </tbody>
-        </table>
-      <% } %>
-
       <% if (records && records.length) { %>
         <h2 style="margin-top: 30px;">🎯 Results</h2>
         <div class="toolbar">
@@ -587,7 +565,7 @@
     (function() {
       const input = document.getElementById('tableSearch');
       if (!input) return;
-      const table = document.querySelector('table:not(.stats-table)');
+      const table = document.querySelector('table');
       if (!table) return;
       const tbody = table.querySelector('tbody');
       if (!tbody) return;
