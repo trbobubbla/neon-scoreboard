@@ -1056,6 +1056,53 @@ app.get("/combined", async (req, res) => {
 
 const port = process.env.PORT || 5000;
 
+// --- Shooter Detail API ---
+app.get("/api/shooter", (req, res) => {
+  const matchUrl = req.query.matchUrl;
+  const shooterId = req.query.id;
+  if (!matchUrl || !shooterId) {
+    return res.json({ error: "Missing matchUrl or id" });
+  }
+
+  let stageResults = [];
+
+  // Try preloaded data first
+  if (preloadedResults[matchUrl] && preloadedResults[matchUrl].allStageResults) {
+    stageResults = preloadedResults[matchUrl].allStageResults;
+  }
+
+  // If empty, try loading from SQLite raw stage data (not available in current schema, use division data)
+  if (stageResults.length === 0) {
+    return res.json({ error: "No stage data available. Reload the match first." });
+  }
+
+  const stages = [];
+  for (const stage of stageResults) {
+    const cols = Object.keys(stage.records[0] || {});
+    const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
+    if (!numKey) continue;
+
+    for (const record of stage.records) {
+      const sid = String(record[numKey] || '').trim();
+      if (sid === shooterId) {
+        const filtered = {};
+        for (const [key, val] of Object.entries(record)) {
+          if (key === 'shooter_link' || key === 'source_url') continue;
+          filtered[key] = val;
+        }
+        stages.push({
+          stage: stage.stageName,
+          division: stage.divisionName,
+          data: filtered,
+        });
+        break;
+      }
+    }
+  }
+
+  return res.json({ shooterId, stages });
+});
+
 // --- CSV Export ---
 app.get("/export/csv", (req, res) => {
   const matchUrl = req.query.matchUrl;

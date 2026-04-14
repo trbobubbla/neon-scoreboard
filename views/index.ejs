@@ -300,6 +300,58 @@
     .search-result-name { font-weight: 600; color: var(--text-primary); font-size: 0.9em; }
     .search-result-meta { font-size: 0.8em; color: var(--text-secondary); }
 
+    /* Shooter Detail Panel */
+    .shooter-row { cursor: pointer; }
+    .shooter-row:hover { background: var(--row-hover) !important; }
+    .detail-row { display: none; }
+    .detail-row.active { display: table-row; }
+    .detail-row td { padding: 0; border-bottom: 1px solid var(--border); }
+    .detail-panel {
+      padding: 16px 20px;
+      background: var(--bg-secondary);
+      border-top: 1px solid var(--border);
+    }
+    .detail-panel-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px;
+    }
+    .detail-panel-header h3 {
+      font-size: 0.95em; font-weight: 700; color: var(--text-primary);
+    }
+    .detail-panel-header .detail-close {
+      background: none; border: none; color: var(--text-muted);
+      cursor: pointer; font-size: 1.1em; padding: 4px; line-height: 1;
+    }
+    .detail-panel-header .detail-close:hover { color: var(--text-primary); }
+    .detail-loading {
+      font-size: 0.85em; color: var(--text-muted); padding: 8px 0;
+    }
+    .detail-stages {
+      display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+      gap: 10px;
+    }
+    .stage-card {
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 12px 14px; background: var(--bg-primary);
+    }
+    .stage-card-name {
+      font-size: 0.8em; font-weight: 700; color: var(--accent);
+      margin-bottom: 6px; text-transform: uppercase; letter-spacing: 0.03em;
+    }
+    .stage-card-div {
+      font-size: 0.7em; color: var(--text-muted); font-weight: 500;
+      margin-bottom: 8px;
+    }
+    .stage-card-data {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 4px 12px;
+      font-size: 0.82em;
+    }
+    .stage-card-data dt { color: var(--text-muted); font-weight: 500; }
+    .stage-card-data dd { color: var(--text-primary); font-weight: 600; text-align: right; }
+    .detail-empty {
+      font-size: 0.85em; color: var(--text-muted); font-style: italic;
+    }
+
     @media (max-width: 768px) {
       .main { padding: 20px 16px; }
       .hero h1 { font-size: 1.5em; }
@@ -309,6 +361,7 @@
       th, td { padding: 8px 10px; }
       .toolbar { flex-direction: column; }
       .topnav-inner { padding: 0; }
+      .detail-stages { grid-template-columns: 1fr; }
     }
   </style>
 </head>
@@ -405,8 +458,8 @@
             </tr>
           </thead>
           <tbody>
-            <% records.forEach((row) => { %>
-              <tr>
+            <% records.forEach((row, rowIdx) => { %>
+              <tr class="shooter-row" data-shooter-id="<%= row['#'] || '' %>" data-row-idx="<%= rowIdx %>">
                 <% if (selectedView === 'combined' && recordKeys.includes('Overall Place')) { %>
                   <td><%= row['Overall Place'] %></td>
                   <% const remainingKeys = recordKeys.filter((key) => key !== 'Overall Place'); %>
@@ -418,6 +471,19 @@
                     <td><%= row[key] %></td>
                   <% }); %>
                 <% } %>
+              </tr>
+              <tr class="detail-row" id="detail-<%= rowIdx %>">
+                <td colspan="<%= recordKeys.length %>">
+                  <div class="detail-panel">
+                    <div class="detail-panel-header">
+                      <h3>Stage Results — <%= row['Shooter'] || row['Name'] || '#' + (row['#'] || rowIdx) %></h3>
+                      <button class="detail-close" onclick="closeDetail(<%= rowIdx %>)">&#x2715;</button>
+                    </div>
+                    <div class="detail-body" id="detail-body-<%= rowIdx %>">
+                      <div class="detail-loading">Click to load stage data...</div>
+                    </div>
+                  </div>
+                </td>
               </tr>
             <% }); %>
           </tbody>
@@ -507,14 +573,102 @@
       if (!table) return;
       const tbody = table.querySelector('tbody');
       if (!tbody) return;
-      const rows = Array.from(tbody.querySelectorAll('tr'));
+      const shooterRows = Array.from(tbody.querySelectorAll('tr.shooter-row'));
       input.addEventListener('input', function() {
         const q = this.value.toLowerCase().trim();
-        rows.forEach(function(row) {
-          row.style.display = q === '' || row.textContent.toLowerCase().includes(q) ? '' : 'none';
+        shooterRows.forEach(function(row) {
+          const visible = q === '' || row.textContent.toLowerCase().includes(q);
+          row.style.display = visible ? '' : 'none';
+          const detailRow = row.nextElementSibling;
+          if (detailRow && detailRow.classList.contains('detail-row')) {
+            if (!visible) detailRow.classList.remove('active');
+          }
         });
       });
     })();
+
+    // Shooter detail expand/collapse
+    var detailCache = {};
+    var matchUrlForApi = '<%= typeof matchUrl !== "undefined" ? matchUrl : "" %>';
+
+    function closeDetail(idx) {
+      var row = document.getElementById('detail-' + idx);
+      if (row) row.classList.remove('active');
+    }
+
+    function renderStages(stages, container) {
+      if (!stages || stages.length === 0) {
+        container.innerHTML = '<div class="detail-empty">No stage data available for this shooter.</div>';
+        return;
+      }
+      var skipKeys = ['#', 'Shooter', 'Name', 'Competitor', 'shooter_link', 'source_url'];
+      var html = '<div class="detail-stages">';
+      stages.forEach(function(s) {
+        html += '<div class="stage-card">';
+        html += '<div class="stage-card-name">' + escHtml(s.stage) + '</div>';
+        html += '<div class="stage-card-div">' + escHtml(s.division) + '</div>';
+        html += '<dl class="stage-card-data">';
+        Object.keys(s.data).forEach(function(key) {
+          if (skipKeys.indexOf(key) >= 0) return;
+          var val = s.data[key];
+          if (val === null || val === undefined || val === '') return;
+          html += '<dt>' + escHtml(key) + '</dt><dd>' + escHtml(String(val)) + '</dd>';
+        });
+        html += '</dl></div>';
+      });
+      html += '</div>';
+      container.innerHTML = html;
+    }
+
+    function escHtml(str) {
+      var d = document.createElement('div');
+      d.textContent = str;
+      return d.innerHTML;
+    }
+
+    document.querySelectorAll('.shooter-row').forEach(function(row) {
+      row.addEventListener('click', function() {
+        var idx = row.getAttribute('data-row-idx');
+        var shooterId = row.getAttribute('data-shooter-id');
+        var detailRow = document.getElementById('detail-' + idx);
+        if (!detailRow) return;
+
+        // Toggle
+        if (detailRow.classList.contains('active')) {
+          detailRow.classList.remove('active');
+          return;
+        }
+
+        // Close other open details
+        document.querySelectorAll('.detail-row.active').forEach(function(r) { r.classList.remove('active'); });
+        detailRow.classList.add('active');
+
+        var body = document.getElementById('detail-body-' + idx);
+        if (!body) return;
+
+        // Check cache
+        if (detailCache[shooterId]) {
+          renderStages(detailCache[shooterId], body);
+          return;
+        }
+
+        body.innerHTML = '<div class="detail-loading">Loading stage data...</div>';
+
+        fetch('/api/shooter?matchUrl=' + encodeURIComponent(matchUrlForApi) + '&id=' + encodeURIComponent(shooterId))
+          .then(function(r) { return r.json(); })
+          .then(function(data) {
+            if (data.error) {
+              body.innerHTML = '<div class="detail-empty">' + escHtml(data.error) + '</div>';
+              return;
+            }
+            detailCache[shooterId] = data.stages;
+            renderStages(data.stages, body);
+          })
+          .catch(function(err) {
+            body.innerHTML = '<div class="detail-empty">Failed to load data.</div>';
+          });
+      });
+    });
   </script>
 </body>
 </html>
