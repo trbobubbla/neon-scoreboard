@@ -78,6 +78,18 @@ const extractDivisionLinks = ($, baseUrl) => {
   return links;
 };
 
+const fetchMatchOverview = async (url) => {
+  const response = await axios.get(url, {
+    headers: { "User-Agent": "ESSPortalReport/1.0" },
+    timeout: 15000,
+  });
+
+  const $ = cheerio.load(response.data);
+  const title = $("h1").first().text().trim() || url;
+  const divisionLinks = extractDivisionLinks($, url);
+  return { title, divisionLinks };
+};
+
 const fetchDivisionData = async (url, divisionName) => {
   try {
     const response = await axios.get(url, {
@@ -127,6 +139,16 @@ const fetchDivisionData = async (url, divisionName) => {
       note: "Ingen tabell hittades på divisionsresultatsidan.",
     },
   ];
+};
+
+const fetchCombinedResults = async (matchUrl) => {
+  const overview = await fetchMatchOverview(matchUrl);
+  let allRecords = [];
+  for (const division of overview.divisionLinks) {
+    const records = await fetchDivisionData(division.url, division.name);
+    allRecords = allRecords.concat(records);
+  }
+  return { title: overview.title, divisionLinks: overview.divisionLinks, records: allRecords };
 };
 
 const fetchMatchData = async (url) => {
@@ -233,24 +255,93 @@ const summarizeRecords = (records) => {
 };
 
 app.get("/", (req, res) => {
-  res.render("index", { matchUrl: "", error: null, records: null, summary: null });
+  res.render("index", {
+    matchUrl: "",
+    matchTitle: null,
+    divisionLinks: null,
+    selectedView: null,
+    sectionTitle: null,
+    error: null,
+    records: null,
+    summary: null,
+  });
 });
 
 app.post("/", async (req, res) => {
   const matchUrl = req.body.match_url ? req.body.match_url.trim() : "";
   if (!matchUrl) {
-    return res.render("index", { matchUrl, error: "Ange en matchlänk.", records: null, summary: null });
+    return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: "Ange en matchlänk.", records: null, summary: null });
   }
   if (!isUrl(matchUrl)) {
-    return res.render("index", { matchUrl, error: "Ogiltig URL.", records: null, summary: null });
+    return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: "Ogiltig URL.", records: null, summary: null });
   }
 
   try {
-    const records = await fetchMatchData(matchUrl);
-    const summary = summarizeRecords(records);
-    return res.render("index", { matchUrl, error: null, records, summary });
+    const overview = await fetchMatchOverview(matchUrl);
+    return res.render("index", {
+      matchUrl,
+      matchTitle: overview.title,
+      divisionLinks: overview.divisionLinks,
+      selectedView: null,
+      sectionTitle: null,
+      error: null,
+      records: null,
+      summary: null,
+    });
   } catch (error) {
-    return res.render("index", { matchUrl, error: error.message, records: null, summary: null });
+    return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: error.message, records: null, summary: null });
+  }
+});
+
+app.get("/division", async (req, res) => {
+  const matchUrl = req.query.matchUrl;
+  const divisionUrl = req.query.divisionUrl;
+  const divisionName = req.query.divisionName || "Division";
+
+  if (!matchUrl || !divisionUrl || !isUrl(matchUrl) || !isUrl(divisionUrl)) {
+    return res.redirect("/");
+  }
+
+  try {
+    const overview = await fetchMatchOverview(matchUrl);
+    const records = await fetchDivisionData(divisionUrl, divisionName);
+    const summary = summarizeRecords(records);
+    return res.render("index", {
+      matchUrl,
+      matchTitle: overview.title,
+      divisionLinks: overview.divisionLinks,
+      selectedView: "division",
+      sectionTitle: divisionName,
+      error: null,
+      records,
+      summary,
+    });
+  } catch (error) {
+    return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: error.message, records: null, summary: null });
+  }
+});
+
+app.get("/combined", async (req, res) => {
+  const matchUrl = req.query.matchUrl;
+  if (!matchUrl || !isUrl(matchUrl)) {
+    return res.redirect("/");
+  }
+
+  try {
+    const combined = await fetchCombinedResults(matchUrl);
+    const summary = summarizeRecords(combined.records);
+    return res.render("index", {
+      matchUrl,
+      matchTitle: combined.title,
+      divisionLinks: combined.divisionLinks,
+      selectedView: "combined",
+      sectionTitle: "Combined",
+      error: null,
+      records: combined.records,
+      summary,
+    });
+  } catch (error) {
+    return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: error.message, records: null, summary: null });
   }
 });
 

@@ -35,6 +35,26 @@
       <div class="alert alert-error"><%= error %></div>
     <% } %>
 
+    <% if (matchTitle) { %>
+      <h2><%= matchTitle %></h2>
+    <% } %>
+
+    <% if (divisionLinks && divisionLinks.length) { %>
+      <div class="card" style="margin-top: 20px;">
+        <h3>Välj division</h3>
+        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px;">
+          <% divisionLinks.forEach((division) => { %>
+            <a class="button" href="/division?matchUrl=<%= encodeURIComponent(matchUrl) %>&divisionUrl=<%= encodeURIComponent(division.url) %>&divisionName=<%= encodeURIComponent(division.name) %>" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;"> <%= division.name %> </a>
+          <% }); %>
+          <a class="button" href="/combined?matchUrl=<%= encodeURIComponent(matchUrl) %>" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#10b981;color:#fff;text-decoration:none;">Combined</a>
+        </div>
+      </div>
+    <% } %>
+
+    <% if (selectedView) { %>
+      <h2 style="margin-top: 24px;"><%= sectionTitle %> <small style="font-size: 0.75em;color:#475569;">(<%= selectedView === 'combined' ? 'Sammanställning av alla divisioner' : 'Division' %>)</small></h2>
+    <% } %>
+
     <% if (summary) { %>
       <h2>Sammanfattning</h2>
       <div class="summary-grid">

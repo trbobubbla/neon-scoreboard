@@ -41,8 +41,9 @@ $env:PORT=5001; npm start
 
 ## Samla alla divisioner
 
-När du anger en matchlänk försöker appen nu själv hitta alla divisionsresultat på match-sidan.
-Den extraherar varje divisionslänk och försöker hämta resultatdata per division.
+När du anger en matchlänk visar appen matchens divisioner som klickbara knappar.
+- Klicka på en division för att se dess enskilda resultat.
+- Klicka på `Combined` för att se en sammanställning av alla divisioner i samma vy.
 
 Om en divisionssida är blockerad av reCAPTCHA visas en notis i resultatlistan istället för tabellen.
 
