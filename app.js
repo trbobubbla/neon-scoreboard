@@ -854,17 +854,8 @@ app.post("/", async (req, res) => {
       console.error("Failed to save to SQLite:", e.message);
     }
 
-    return res.render("index", {
-      matchUrl,
-      matchTitle: overview.title,
-      divisionLinks: overview.divisionLinks,
-      selectedView: null,
-      sectionTitle: null,
-      error: null,
-      records: null,
-      summary: null,
-      isPreloaded: true,
-    });
+    // Auto-load combined view by default
+    return res.redirect(`/combined?matchUrl=${encodeURIComponent(matchUrl)}`);
   } catch (error) {
     return res.render("index", { matchUrl, matchTitle: null, divisionLinks: null, selectedView: null, sectionTitle: null, error: error.message, records: null, summary: null, isPreloaded: false });
   }
