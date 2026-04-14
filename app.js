@@ -228,9 +228,8 @@ const fetchDivisionData = async (matchUrl, divisionName, divisionUrl, divisionRe
   }
 };
 
-const fetchShooterVerify = async (matchUrl, shooterId) => {
+const fetchShooterVerify = async (matchUrl, shooterId, browser) => {
   console.log(`Starting fetchShooterVerify for shooter #${shooterId}`);
-  const browser = await launchBrowser();
   let page;
 
   try {
@@ -240,15 +239,13 @@ const fetchShooterVerify = async (matchUrl, shooterId) => {
     );
 
     // Navigate to the match page (which contains the verify form)
-    console.log(`Navigating to match page: ${matchUrl}`);
     await page.goto(matchUrl, { waitUntil: "networkidle2", timeout: 60000 });
 
     // Wait for the verify form to be present
     await page.waitForSelector('#shooter', { timeout: 15000 });
 
     // Fill in the shooter number
-    console.log(`Typing shooter ID ${shooterId} into #shooter field`);
-    await page.type('#shooter', String(shooterId), { delay: 50 });
+    await page.type('#shooter', String(shooterId), { delay: 30 });
 
     // Click the GO button via submitRecaptcha (same pattern as division fetching)
     const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => null);
@@ -264,51 +261,45 @@ const fetchShooterVerify = async (matchUrl, shooterId) => {
       throw new Error(submitted.error);
     }
 
-    console.log(`Submitted verify form, waiting for results...`);
     await navigationPromise;
-    await new Promise((resolve) => setTimeout(resolve, 2000));
+    await new Promise((resolve) => setTimeout(resolve, 1500));
 
     const html = await page.content();
 
-    // Save debug HTML for first few shooters
+    // Save debug HTML for first shooter only
     const fs = require('fs');
-    const debugFile = path.join(__dirname, `debug-verify-${shooterId}.html`);
-    fs.writeFileSync(debugFile, html, 'utf8');
-    console.log(`Saved verify HTML for shooter #${shooterId}`);
+    if (!fetchShooterVerify._debugSaved) {
+      fs.writeFileSync(path.join(__dirname, 'debug-verify-first.html'), html, 'utf8');
+      fetchShooterVerify._debugSaved = true;
+      console.log(`Saved first verify debug HTML`);
+    }
 
     const $ = cheerio.load(html);
 
     // Parse ALL tables on the verify page
     const stages = [];
     const tables = $('table');
-    console.log(`Found ${tables.length} tables on verify page for shooter #${shooterId}`);
 
     tables.each((_, table) => {
       const rows = parseHtmlTable($(table), $);
       rows.forEach((row) => stages.push(row));
     });
 
-    if (stages.length > 0) {
-      console.log(`Stage columns for #${shooterId}: ${Object.keys(stages[0]).join(', ')}`);
-      console.log(`First stage data: ${JSON.stringify(stages[0])}`);
-    } else {
-      console.log(`No stage rows parsed for shooter #${shooterId}`);
-      // Log some page text for debugging
-      const bodyText = $('body').text().replace(/\s+/g, ' ').trim().substring(0, 500);
-      console.log(`Page body text (first 500 chars): ${bodyText}`);
+    if (stages.length > 0 && !fetchShooterVerify._colsLogged) {
+      console.log(`Verify stage columns: ${Object.keys(stages[0]).join(', ')}`);
+      console.log(`First stage sample: ${JSON.stringify(stages[0])}`);
+      fetchShooterVerify._colsLogged = true;
     }
 
-    console.log(`Parsed ${stages.length} stage rows for shooter #${shooterId}`);
-
+    console.log(`  #${shooterId}: ${stages.length} stages`);
     return { shooterId, stages };
   } catch (error) {
-    console.log(`Error in fetchShooterVerify for #${shooterId}: ${error.message}`);
+    console.log(`  #${shooterId}: ERROR - ${error.message}`);
     return { shooterId, stages: [] };
   } finally {
     if (page) {
       await page.close();
     }
-    await browser.close();
   }
 };
 
@@ -745,20 +736,30 @@ app.get("/combined", async (req, res) => {
       }
       console.log(`Built shooter lookup with ${Object.keys(shooterLookup).length} entries`);
 
-      // Fetch verify data with concurrency limit of 2
-      const concurrency = 2;
-      const allShooterData = [];
-      for (let i = 0; i < shooterIds.length; i += concurrency) {
-        const batch = shooterIds.slice(i, i + concurrency);
-        console.log(`Verify batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(shooterIds.length / concurrency)}: shooters ${batch.join(', ')}`);
-        const results = await Promise.all(
-          batch.map((id) => fetchShooterVerify(matchUrl, id))
-        );
-        allShooterData.push(...results);
-      }
+      // Launch ONE shared browser for all verify fetches
+      const browser = await launchBrowser();
+      fetchShooterVerify._debugSaved = false;
+      fetchShooterVerify._colsLogged = false;
 
-      // Calculate true combined from raw stage HF data
-      allRecords = calculateCombinedFromVerify(allShooterData, shooterLookup);
+      try {
+        // Fetch verify data with concurrency limit of 5 (parallel tabs)
+        const concurrency = 5;
+        const allShooterData = [];
+        for (let i = 0; i < shooterIds.length; i += concurrency) {
+          const batch = shooterIds.slice(i, i + concurrency);
+          console.log(`Verify batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(shooterIds.length / concurrency)} (${batch.length} shooters): ${batch.join(', ')}`);
+          const results = await Promise.all(
+            batch.map((id) => fetchShooterVerify(matchUrl, id, browser))
+          );
+          allShooterData.push(...results);
+          console.log(`  Progress: ${Math.min(i + concurrency, shooterIds.length)}/${shooterIds.length} done`);
+        }
+
+        // Calculate true combined from raw stage HF data
+        allRecords = calculateCombinedFromVerify(allShooterData, shooterLookup);
+      } finally {
+        await browser.close();
+      }
 
       if (allRecords.length > 0) {
         console.log(`Combined calculated from verify stage data`);
