@@ -553,6 +553,17 @@ const listSavedMatches = () => {
   return db.prepare("SELECT url, title, fetched_at FROM matches ORDER BY fetched_at DESC").all();
 };
 
+const deleteMatchFromDb = (url) => {
+  const match = db.prepare("SELECT id FROM matches WHERE url = ?").get(url);
+  if (!match) return false;
+  const transaction = db.transaction(() => {
+    db.prepare("DELETE FROM match_results WHERE match_id = ?").run(match.id);
+    db.prepare("DELETE FROM matches WHERE id = ?").run(match.id);
+  });
+  transaction();
+  return true;
+};
+
 const filterOutSourceUrl = (records) => {
   return records.map((record) => {
     const filtered = { ...record };
@@ -1313,6 +1324,14 @@ app.get("/export/pdf", (req, res) => {
 app.get("/history", (req, res) => {
   const matches = listSavedMatches();
   res.render("history", { matches });
+});
+
+app.post("/history/delete", (req, res) => {
+  const url = req.body.url;
+  if (!url) return res.redirect("/history");
+  deleteMatchFromDb(url);
+  if (preloadedResults[url]) delete preloadedResults[url];
+  res.redirect("/history");
 });
 
 app.get("/history/load", async (req, res) => {

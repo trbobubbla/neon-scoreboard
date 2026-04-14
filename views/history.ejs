@@ -101,14 +101,22 @@
     .match-item:hover { border-color: var(--border-hover); }
     .match-title { font-weight: 600; color: var(--text-primary); font-size: 0.95em; }
     .match-date { font-size: 0.8em; color: var(--text-muted); margin-top: 2px; }
-    .match-actions a {
+    .match-actions { display: flex; gap: 8px; align-items: center; }
+    .match-actions a, .match-actions button {
       display: inline-flex; align-items: center; justify-content: center;
       padding: 7px 18px; border-radius: 8px;
-      background: var(--accent); color: #fff;
-      text-decoration: none; font-weight: 600; font-size: 0.85em;
-      transition: all 0.15s;
+      font-weight: 600; font-size: 0.85em;
+      transition: all 0.15s; cursor: pointer; border: none;
+    }
+    .match-actions a {
+      background: var(--accent); color: #fff; text-decoration: none;
     }
     .match-actions a:hover { background: var(--accent-hover); }
+    .btn-delete {
+      background: transparent; color: var(--text-muted);
+      border: 1px solid var(--border) !important;
+    }
+    .btn-delete:hover { color: #ef4444; border-color: #ef4444 !important; }
     .empty { text-align: center; padding: 60px 20px; color: var(--text-muted); font-size: 0.95em; }
     .empty a { color: var(--accent); text-decoration: none; font-weight: 500; }
     .empty a:hover { text-decoration: underline; }
@@ -149,6 +157,10 @@
             </div>
             <div class="match-actions">
               <a href="/history/load?url=<%= encodeURIComponent(m.url) %>">Load</a>
+              <form method="POST" action="/history/delete" onsubmit="return confirm('Ta bort denna match?')">
+                <input type="hidden" name="url" value="<%= m.url %>">
+                <button type="submit" class="btn-delete" title="Ta bort">&#x1F5D1;</button>
+              </form>
             </div>
           </li>
         <% }); %>
