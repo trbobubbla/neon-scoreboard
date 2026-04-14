@@ -62,20 +62,28 @@ const parseKeyValueList = ($, selector) => {
   return records;
 };
 
+const getRelativePath = (url) => {
+  try {
+    const parsed = new URL(url, "https://portal.ipscess.org");
+    return parsed.pathname + parsed.search;
+  } catch (_) {
+    return url;
+  }
+};
+
 const extractDivisionLinks = ($, baseUrl) => {
   const links = [];
   $(".list-group-item").each((_, node) => {
     const href = $(node).attr("onclick") || "";
-    const match = href.match(/submitRecaptcha\(['"]([^'"]+)['"]/);
+    const match = href.match(/submitRecaptcha\(['"]([^'"\)]+)['"]/);
     if (match) {
       const divisionName = $(node).text().trim();
+      const rawUrl = match[1];
       try {
-        links.push({
-          name: divisionName,
-          url: new URL(match[1], baseUrl).toString(),
-        });
+        const absoluteUrl = new URL(rawUrl, baseUrl).toString();
+        links.push({ name: divisionName, url: absoluteUrl, relativeUrl: rawUrl });
       } catch (_) {
-        links.push({ name: divisionName, url: match[1] });
+        links.push({ name: divisionName, url: rawUrl, relativeUrl: rawUrl });
       }
     }
   });
@@ -101,7 +109,7 @@ const launchBrowser = async () => {
   });
 };
 
-const fetchDivisionData = async (matchUrl, divisionName, divisionUrl) => {
+const fetchDivisionData = async (matchUrl, divisionName, divisionUrl, divisionRelativeUrl) => {
   const browser = await launchBrowser();
   let page;
 
@@ -111,25 +119,31 @@ const fetchDivisionData = async (matchUrl, divisionName, divisionUrl) => {
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
     await page.goto(matchUrl, { waitUntil: "networkidle2", timeout: 60000 });
-    await page.waitForFunction(
-      (url) => {
-        return Array.from(document.querySelectorAll(".list-group-item")).some((el) => {
-          return el.getAttribute("onclick") && el.getAttribute("onclick").includes(url);
-        });
-      },
-      { timeout: 30000 },
-      divisionUrl
-    );
+    const relativePath = divisionRelativeUrl || getRelativePath(divisionUrl);
+    await page.waitForSelector("a.list-group-item-action", { timeout: 30000 });
 
     const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => null);
-    await page.evaluate((url) => {
+    const clicked = await page.evaluate((absoluteUrl, relUrl) => {
       if (typeof window.submitRecaptcha !== "function") {
-        throw new Error("submitRecaptcha saknas på portal-sidan");
+        return { success: false, error: "submitRecaptcha saknas på portal-sidan" };
       }
-      window.submitRecaptcha(url, "captcha-form");
-    }, divisionUrl);
+      const anchors = Array.from(document.querySelectorAll("a.list-group-item-action"));
+      const target = anchors.find((el) => {
+        const onclick = el.getAttribute("onclick") || "";
+        return onclick.includes(absoluteUrl) || onclick.includes(relUrl);
+      });
+      if (!target) {
+        return { success: false, error: "Kunde inte hitta matching division-knapp" };
+      }
+      target.click();
+      return { success: true };
+    }, divisionUrl, relativePath);
+
+    if (!clicked.success) {
+      throw new Error(clicked.error);
+    }
     await navigationPromise;
-    await page.waitForTimeout(2000);
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const html = await page.content();
     const $ = cheerio.load(html);
@@ -172,7 +186,7 @@ const fetchCombinedResults = async (matchUrl) => {
   const overview = await fetchMatchOverview(matchUrl);
   let allRecords = [];
   for (const division of overview.divisionLinks) {
-    const records = await fetchDivisionData(matchUrl, division.name, division.url);
+    const records = await fetchDivisionData(matchUrl, division.name, division.url, division.relativeUrl);
     allRecords = allRecords.concat(records);
   }
   return { title: overview.title, divisionLinks: overview.divisionLinks, records: allRecords };
