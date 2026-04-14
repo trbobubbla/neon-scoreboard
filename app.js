@@ -12,24 +12,24 @@ const isUrl = (value) => {
   return /^https?:\/\//i.test(value);
 };
 
-const parseHtmlTable = (table) => {
+const parseHtmlTable = (table, $) => {
   const headers = [];
   table.find("tr").each((index, row) => {
-    const ths = cheerio(row).find("th");
+    const ths = $(row).find("th");
     if (ths.length) {
-      ths.each((_, th) => headers.push(cheerio(th).text().trim()));
+      ths.each((_, th) => headers.push($(th).text().trim()));
     }
   });
 
   const records = [];
   table.find("tr").each((_, row) => {
-    const cells = cheerio(row).find("td, th");
+    const cells = $(row).find("td, th");
     if (cells.length === 0) {
       return;
     }
 
     const values = [];
-    cells.each((_, cell) => values.push(cheerio(cell).text().trim()));
+    cells.each((_, cell) => values.push($(cell).text().trim()));
 
     if (headers.length === values.length) {
       const record = {};
@@ -78,7 +78,7 @@ const fetchMatchData = async (url) => {
   const $ = cheerio.load(response.data);
   const table = $("table").first();
   if (table.length) {
-    const records = parseHtmlTable(table);
+    const records = parseHtmlTable(table, $);
     if (records.length) {
       return records;
     }
@@ -90,8 +90,8 @@ const fetchMatchData = async (url) => {
     const descs = dl.find("dd");
     const records = [];
     terms.each((index, term) => {
-      const field = cheerio(term).text().trim();
-      const value = cheerio(descs.get(index)).text().trim();
+      const field = $(term).text().trim();
+      const value = $(descs.get(index)).text().trim();
       records.push({ field, value });
     });
     if (records.length) {
