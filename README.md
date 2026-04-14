@@ -15,6 +15,16 @@ Det här repot innehåller verktyg för att sammanställa och aggregera ESSPorta
 - `requirements.txt` – beroenden för projektet
 - `.gitignore` – filer som ska ignoreras av Git
 
+## Webbgränssnitt
+
+Starta webbappen och öppna sedan sidan i webbläsaren:
+
+```powershell
+python app.py
+```
+
+Öppna `http://127.0.0.1:5000` och klistra in matchlänken.
+
 ## Exempel
 
 ```powershell

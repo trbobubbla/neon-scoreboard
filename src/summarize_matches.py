@@ -21,6 +21,20 @@ def load_file(path: Path) -> pd.DataFrame:
     raise ValueError(f"Stöds inte filtyp: {path}")
 
 
+def parse_html_table(table) -> pd.DataFrame:
+    rows = []
+    headers = [th.get_text(strip=True) for th in table.find_all("th")]
+    for tr in table.find_all("tr"):
+        cols = [td.get_text(strip=True) for td in tr.find_all(["td", "th"])]
+        if not cols:
+            continue
+        if headers and len(cols) == len(headers):
+            rows.append(dict(zip(headers, cols)))
+        elif len(cols) >= 2:
+            rows.append({"field": cols[0], "value": " ".join(cols[1:])})
+    return pd.DataFrame(rows)
+
+
 def load_url(url: str) -> pd.DataFrame:
     response = requests.get(url, timeout=15, headers={"User-Agent": "ESSPortalReport/1.0"})
     response.raise_for_status()
@@ -37,7 +51,7 @@ def load_url(url: str) -> pd.DataFrame:
 
     table = soup.find("table")
     if table:
-        return pd.read_html(str(table))[0]
+        return parse_html_table(table)
 
     definition_list = soup.find("dl")
     if definition_list:
