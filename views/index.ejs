@@ -3,73 +3,305 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>ESSPortal Matchrapport</title>
+  <title>ESSPortal Match Report</title>
   <style>
-    body { font-family: Arial, sans-serif; margin: 24px; background: #f4f7fb; color: #0f172a; }
-    .container { max-width: 980px; margin: 0 auto; background: #fff; padding: 24px; border-radius: 12px; box-shadow: 0 8px 24px rgba(15,23,42,0.08); }
-    label { display: block; margin-bottom: 8px; font-weight: 600; }
-    input[type=url] { width: 100%; padding: 12px; border: 1px solid #cbd5e1; border-radius: 8px; margin-bottom: 16px; }
-    button { background: #2563eb; color: #fff; padding: 12px 20px; border: none; border-radius: 8px; cursor: pointer; }
-    button:hover { background: #1d4ed8; }
-    .alert { border-radius: 10px; padding: 16px; margin: 18px 0; }
-    .alert-error { background: #fee2e2; color: #991b1b; border: 1px solid #fecaca; }
-    table { width: 100%; border-collapse: collapse; margin-top: 20px; }
-    th, td { border: 1px solid #e2e8f0; padding: 12px; }
-    th { background: #f8fafc; text-align: left; }
-    .summary-grid { display: grid; gap: 14px; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); margin-top: 16px; }
-    .card { background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 12px; padding: 16px; }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
+      background: linear-gradient(135deg, #0a0e27 0%, #1a0e3d 100%);
+      color: #e0e6ff;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      background: rgba(20, 10, 50, 0.6);
+      backdrop-filter: blur(20px);
+      border: 1px solid rgba(100, 200, 255, 0.2);
+      border-radius: 20px;
+      padding: 40px;
+      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.1);
+      animation: slideIn 0.6s ease-out;
+    }
+    @keyframes slideIn {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    h1 {
+      font-size: 3em;
+      font-weight: 700;
+      background: linear-gradient(120deg, #64d9ff, #0066ff, #ff00ff, #64d9ff);
+      background-size: 300% 300%;
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      background-clip: text;
+      margin-bottom: 10px;
+      animation: gradient 8s ease infinite;
+    }
+    @keyframes gradient {
+      0% { background-position: 0% 50%; }
+      50% { background-position: 100% 50%; }
+      100% { background-position: 0% 50%; }
+    }
+    h2 { font-size: 1.8em; color: #64d9ff; margin-top: 30px; margin-bottom: 20px; font-weight: 600; }
+    h3 { font-size: 1.3em; color: #64d9ff; margin-top: 20px; margin-bottom: 12px; }
+    p { font-size: 1.05em; margin-bottom: 15px; color: #b0c4ff; }
+    label { display: block; margin-bottom: 10px; font-weight: 600; color: #64d9ff; font-size: 0.95em; }
+    input[type=url] {
+      width: 100%;
+      padding: 14px 18px;
+      border: 2px solid rgba(100, 217, 255, 0.3);
+      border-radius: 10px;
+      background: rgba(10, 30, 60, 0.5);
+      color: #e0e6ff;
+      font-size: 1em;
+      margin-bottom: 18px;
+      transition: all 0.3s;
+      font-family: inherit;
+    }
+    input[type=url]:focus {
+      outline: none;
+      border-color: #64d9ff;
+      box-shadow: 0 0 20px rgba(100, 217, 255, 0.5);
+      background: rgba(10, 30, 60, 0.8);
+    }
+    button {
+      background: linear-gradient(135deg, #0066ff, #00d4ff);
+      color: #fff;
+      padding: 14px 30px;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      font-size: 1em;
+      font-weight: 600;
+      transition: all 0.3s;
+      box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4);
+    }
+    button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 25px rgba(0, 102, 255, 0.6);
+    }
+    button:active {
+      transform: translateY(0);
+    }
+    .alert {
+      border-radius: 12px;
+      padding: 20px;
+      margin: 20px 0;
+      border: 2px solid #ff4444;
+      background: rgba(255, 68, 68, 0.1);
+      color: #ff9999;
+    }
+    .division-buttons {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+      gap: 12px;
+      margin-top: 18px;
+    }
+    .div-btn {
+      display: inline-block;
+      padding: 12px 16px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, rgba(100, 217, 255, 0.2), rgba(0, 102, 255, 0.2));
+      color: #64d9ff;
+      text-decoration: none;
+      border: 2px solid rgba(100, 217, 255, 0.4);
+      font-weight: 600;
+      transition: all 0.3s;
+      text-align: center;
+      cursor: pointer;
+    }
+    .div-btn:hover {
+      border-color: #64d9ff;
+      background: linear-gradient(135deg, rgba(100, 217, 255, 0.4), rgba(0, 102, 255, 0.3));
+      box-shadow: 0 0 15px rgba(100, 217, 255, 0.5);
+      transform: translateY(-3px);
+    }
+    .combined-btn {
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 200, 100, 0.2));
+      color: #00ff88;
+      border-color: rgba(0, 255, 136, 0.4);
+    }
+    .combined-btn:hover {
+      border-color: #00ff88;
+      background: linear-gradient(135deg, rgba(0, 255, 136, 0.4), rgba(0, 200, 100, 0.3));
+      box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
+    }
+    .summary-grid {
+      display: grid;
+      gap: 16px;
+      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+      margin-top: 20px;
+    }
+    .card {
+      background: linear-gradient(135deg, rgba(100, 217, 255, 0.1), rgba(0, 102, 255, 0.05));
+      border: 2px solid rgba(100, 217, 255, 0.2);
+      border-radius: 12px;
+      padding: 20px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+    .card:hover {
+      border-color: rgba(100, 217, 255, 0.6);
+      box-shadow: 0 0 20px rgba(100, 217, 255, 0.3);
+      transform: translateY(-5px);
+    }
+    .card strong { color: #64d9ff; font-size: 0.9em; display: block; margin-bottom: 8px; }
+    .card div { font-size: 1.8em; color: #00ff88; font-weight: 700; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 24px;
+      font-size: 0.95em;
+      overflow-x: auto;
+    }
+    th, td {
+      border: 1px solid rgba(100, 217, 255, 0.2);
+      padding: 12px;
+      text-align: left;
+    }
+    th {
+      background: linear-gradient(90deg, rgba(100, 217, 255, 0.15), rgba(0, 102, 255, 0.1));
+      color: #64d9ff;
+      font-weight: 600;
+      position: sticky;
+      top: 0;
+    }
+    tbody tr {
+      transition: all 0.2s;
+    }
+    tbody tr:hover {
+      background: rgba(100, 217, 255, 0.1);
+    }
+    tbody tr:nth-child(even) {
+      background: rgba(0, 0, 0, 0.2);
+    }
+    .stats-table {
+      font-size: 0.9em;
+    }
+    .preload-badge {
+      display: inline-block;
+      background: linear-gradient(135deg, #00ff88, #00d4ff);
+      color: #0a0e27;
+      padding: 6px 12px;
+      border-radius: 20px;
+      font-size: 0.8em;
+      font-weight: 700;
+      margin-left: 10px;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.6; }
+    }
+    /* Loading overlay */
+    .loading-overlay {
+      display: none;
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: rgba(5, 5, 20, 0.85);
+      backdrop-filter: blur(8px);
+      z-index: 9999;
+      justify-content: center;
+      align-items: center;
+      flex-direction: column;
+      gap: 24px;
+    }
+    .loading-overlay.active {
+      display: flex;
+    }
+    .loading-spinner {
+      width: 60px;
+      height: 60px;
+      border: 4px solid rgba(100, 217, 255, 0.15);
+      border-top-color: #64d9ff;
+      border-radius: 50%;
+      animation: spin 0.8s linear infinite;
+    }
+    @keyframes spin {
+      to { transform: rotate(360deg); }
+    }
+    .loading-text {
+      font-size: 1.3em;
+      font-weight: 600;
+      color: #64d9ff;
+      text-align: center;
+      animation: pulse 2s ease-in-out infinite;
+    }
+    .loading-sub {
+      font-size: 0.9em;
+      color: #b0c4ff;
+      opacity: 0.7;
+    }
+    @media (max-width: 768px) {
+      .container { padding: 25px; }
+      h1 { font-size: 2em; }
+      h2 { font-size: 1.4em; }
+      input[type=url], button { font-size: 0.95em; padding: 12px 20px; }
+      .division-buttons { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
+      table { font-size: 0.85em; }
+      th, td { padding: 8px; }
+    }
   </style>
 </head>
 <body>
+  <!-- Loading overlay -->
+  <div class="loading-overlay" id="loadingOverlay">
+    <div class="loading-spinner"></div>
+    <div class="loading-text" id="loadingText">Loading...</div>
+    <div class="loading-sub" id="loadingSub">This may take a moment</div>
+  </div>
+
   <div class="container">
-    <h1>ESSPortal Matchrapport</h1>
-    <p>Ange matchlänken och tryck <strong>Hämta match</strong>.</p>
+    <h1>⚡ ESSPortal Match Report</h1>
+    <p>Enter match URL and unleash the competition data</p>
 
     <form method="post">
-      <label for="match_url">Matchlänk</label>
+      <label for="match_url">Match Link</label>
       <input id="match_url" name="match_url" type="url" placeholder="https://portal.ipscess.org/portal/match/..." value="<%= matchUrl %>" required>
-      <button type="submit">Hämta match</button>
+      <button type="submit">⚡ Launch</button>
     </form>
 
     <% if (error) { %>
-      <div class="alert alert-error"><%= error %></div>
+      <div class="alert">❌ <%= error %></div>
     <% } %>
 
     <% if (matchTitle) { %>
-      <h2><%= matchTitle %></h2>
+      <h2><%= matchTitle %><% if (typeof isPreloaded !== 'undefined' && isPreloaded) { %><span class="preload-badge">✓ Preloaded</span><% } %></h2>
     <% } %>
 
     <% if (divisionLinks && divisionLinks.length) { %>
-      <div class="card" style="margin-top: 20px;">
-        <h3>Välj division</h3>
-        <div style="display: flex; flex-wrap: wrap; gap: 10px; margin-top: 12px;">
+      <div style="margin-top: 30px;">
+        <h3>🏆 Select Division</h3>
+        <div class="division-buttons">
           <% divisionLinks.forEach((division) => { %>
-            <a class="button" href="/division?matchUrl=<%= encodeURIComponent(matchUrl) %>&divisionUrl=<%= encodeURIComponent(division.url) %>&divisionName=<%= encodeURIComponent(division.name) %>" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#2563eb;color:#fff;text-decoration:none;"> <%= division.name %> </a>
+            <a href="/division?matchUrl=<%= encodeURIComponent(matchUrl) %>&divisionUrl=<%= encodeURIComponent(division.url) %>&divisionName=<%= encodeURIComponent(division.name) %>" class="div-btn"><%= division.name %></a>
           <% }); %>
-          <a class="button" href="/combined?matchUrl=<%= encodeURIComponent(matchUrl) %>" style="display:inline-block;padding:10px 14px;border-radius:8px;background:#10b981;color:#fff;text-decoration:none;">Combined</a>
+          <a href="/combined?matchUrl=<%= encodeURIComponent(matchUrl) %>" class="div-btn combined-btn">📊 Combined</a>
         </div>
       </div>
     <% } %>
 
     <% if (selectedView) { %>
-      <h2 style="margin-top: 24px;"><%= sectionTitle %> <small style="font-size: 0.75em;color:#475569;">(<%= selectedView === 'combined' ? 'Sammanställning av alla divisioner' : 'Division' %>)</small></h2>
+      <h2 style="margin-top: 30px;"><%= sectionTitle %> <small style="font-size: 0.7em; color: #64d9ff; opacity: 0.8;">[<%= selectedView === 'combined' ? '🌐 Combined' : '📍 Division' %>]</small></h2>
     <% } %>
 
     <% if (summary) { %>
-      <h2>Sammanfattning</h2>
+      <h2 style="margin-top: 30px;">📈 Statistics</h2>
       <div class="summary-grid">
-        <div class="card"><strong>Rader</strong><div><%= summary.row_count %></div></div>
-        <div class="card"><strong>Kolumner</strong><div><%= summary.columns.length %></div></div>
+        <div class="card"><strong>Competitors</strong><div><%= summary.row_count %></div></div>
+        <div class="card"><strong>Fields</strong><div><%= summary.columns.length %></div></div>
         <% if (summary.unique_matches !== undefined) { %>
-          <div class="card"><strong>Unika matcher</strong><div><%= summary.unique_matches %></div></div>
+          <div class="card"><strong>Unique Matches</strong><div><%= summary.unique_matches %></div></div>
         <% } %>
       </div>
 
-      <% if (Object.keys(summary.stats).length) { %>
-        <h3>Numerisk statistik</h3>
-        <table>
+      <% if (selectedView === 'combined' && Object.keys(summary.stats).length) { %>
+        <h3>Performance Metrics</h3>
+        <table class="stats-table">
           <thead>
-            <tr><th>Fält</th><th>Antal</th><th>Medel</th><th>Min</th><th>Max</th></tr>
+            <tr><th>Field</th><th>Count</th><th>Mean</th><th>Min</th><th>Max</th></tr>
           </thead>
           <tbody>
             <% for (const [field, stats] of Object.entries(summary.stats)) { %>
@@ -86,27 +318,96 @@
       <% } %>
 
       <% if (records && records.length) { %>
-        <h2>Data</h2>
+        <h2 style="margin-top: 30px;">🎯 Results</h2>
+        <div style="overflow-x: auto;">
         <table>
           <thead>
             <tr>
-              <% Object.keys(records[0]).forEach((key) => { %>
-                <th><%= key %></th>
-              <% }); %>
+              <% const recordKeys = Object.keys(records[0]); %>
+              <% if (selectedView === 'combined' && recordKeys.includes('Overall Place')) { %>
+                <th>Overall Place</th>
+                <% const remainingKeys = recordKeys.filter((key) => key !== 'Overall Place'); %>
+                <% remainingKeys.forEach((key) => { %>
+                  <th><%= key %></th>
+                <% }); %>
+              <% } else { %>
+                <% recordKeys.forEach((key) => { %>
+                  <th><%= key %></th>
+                <% }); %>
+              <% } %>
             </tr>
           </thead>
           <tbody>
             <% records.forEach((row) => { %>
               <tr>
-                <% Object.values(row).forEach((value) => { %>
-                  <td><%= value %></td>
-                <% }); %>
+                <% if (selectedView === 'combined' && recordKeys.includes('Overall Place')) { %>
+                  <td><%= row['Overall Place'] %></td>
+                  <% const remainingKeys = recordKeys.filter((key) => key !== 'Overall Place'); %>
+                  <% remainingKeys.forEach((key) => { %>
+                    <td><%= row[key] %></td>
+                  <% }); %>
+                <% } else { %>
+                  <% recordKeys.forEach((key) => { %>
+                    <td><%= row[key] %></td>
+                  <% }); %>
+                <% } %>
               </tr>
             <% }); %>
           </tbody>
         </table>
+        </div>
       <% } %>
     <% } %>
   </div>
+
+  <script>
+    const overlay = document.getElementById('loadingOverlay');
+    const loadingText = document.getElementById('loadingText');
+    const loadingSub = document.getElementById('loadingSub');
+
+    function showLoading(text, sub) {
+      loadingText.textContent = text;
+      loadingSub.textContent = sub || 'This may take a moment';
+      overlay.classList.add('active');
+    }
+
+    // Form submit (Launch button)
+    const form = document.querySelector('form');
+    if (form) {
+      form.addEventListener('submit', function(e) {
+        const url = document.getElementById('match_url').value;
+        if (!url) return;
+        showLoading('⚡ Fetching match data...', 'Connecting to ESSPortal and preloading all divisions');
+        // Cycle through status messages
+        const messages = [
+          ['⏳ Loading match overview...', 'Parsing match page'],
+          ['📡 Fetching divisions...', 'Launching headless browser for each division'],
+          ['🔄 Still working...', 'Large matches may take a while'],
+          ['⚙️ Almost there...', 'Parsing results and collecting shooter data'],
+        ];
+        let i = 0;
+        setInterval(function() {
+          if (i < messages.length) {
+            loadingText.textContent = messages[i][0];
+            loadingSub.textContent = messages[i][1];
+            i++;
+          }
+        }, 4000);
+      });
+    }
+
+    // Division and Combined links
+    document.querySelectorAll('.div-btn').forEach(function(btn) {
+      btn.addEventListener('click', function(e) {
+        const isCombined = btn.classList.contains('combined-btn');
+        const name = btn.textContent.trim();
+        if (isCombined) {
+          showLoading('📊 Loading combined results...', 'Aggregating all divisions and calculating rankings');
+        } else {
+          showLoading('🎯 Loading ' + name + '...', 'Fetching division results');
+        }
+      });
+    });
+  </script>
 </body>
 </html>

@@ -17,3 +17,8 @@ results/
 
 # VS Code
 .vscode/
+
+# Debug files
+debug-*.html
+debug-*.txt
+temp-*.html
