@@ -3,6 +3,9 @@ npm-debug.log
 debug-*.html
 debug-*.txt
 temp-*.html
+results.db
+results.db-wal
+results.db-shm
 .git
 .gitignore
 .vscode

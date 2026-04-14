@@ -21,6 +21,9 @@ venv/
 # Data and results
 data/
 results/
+results.db
+results.db-wal
+results.db-shm
 
 # IDE
 .vscode/

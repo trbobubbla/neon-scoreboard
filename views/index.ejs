@@ -394,6 +394,10 @@
     </div>
     <h1>⚡ Neon Scoreboard</h1>
     <p>Enter match URL and unleash the competition data</p>
+    <div style="margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap;">
+      <a href="/compare" style="color: var(--accent); text-decoration: none; font-weight: 600;">🔀 Compare Matches</a>
+      <a href="/history" style="color: var(--accent); text-decoration: none; font-weight: 600;">📚 Match History</a>
+    </div>
 
     <form method="post">
       <label for="match_url">Match Link</label>
@@ -462,7 +466,8 @@
             <input type="text" class="search-box" id="tableSearch" placeholder="🔍 Filter results..." autocomplete="off">
             <div class="search-results" id="searchResults"></div>
           </div>
-          <a class="toolbar-btn" id="csvExport" href="/export/csv?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">📥 Export CSV</a>
+          <a class="toolbar-btn" href="/export/csv?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">📥 CSV</a>
+          <a class="toolbar-btn" href="/export/pdf?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">📄 PDF</a>
         </div>
         <div style="overflow-x: auto;">
         <table>

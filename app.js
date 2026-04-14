@@ -4,6 +4,8 @@ const cheerio = require("cheerio");
 const path = require("path");
 const puppeteer = require("puppeteer-extra");
 const StealthPlugin = require("puppeteer-extra-plugin-stealth");
+const PDFDocument = require("pdfkit");
+const Database = require("better-sqlite3");
 
 puppeteer.use(StealthPlugin());
 
@@ -11,6 +13,29 @@ const app = express();
 app.set("view engine", "ejs");
 app.set("views", path.join(__dirname, "views"));
 app.use(express.urlencoded({ extended: false }));
+app.use(express.json());
+
+// --- SQLite setup ---
+const db = new Database(path.join(__dirname, "results.db"));
+db.pragma("journal_mode = WAL");
+db.exec(`
+  CREATE TABLE IF NOT EXISTS matches (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    url TEXT NOT NULL,
+    title TEXT,
+    fetched_at TEXT DEFAULT (datetime('now')),
+    UNIQUE(url)
+  );
+  CREATE TABLE IF NOT EXISTS match_results (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    match_id INTEGER NOT NULL,
+    view TEXT NOT NULL,
+    data TEXT NOT NULL,
+    saved_at TEXT DEFAULT (datetime('now')),
+    FOREIGN KEY (match_id) REFERENCES matches(id) ON DELETE CASCADE
+  );
+  CREATE INDEX IF NOT EXISTS idx_match_results_match ON match_results(match_id, view);
+`);
 
 const isUrl = (value) => {
   return /^https?:\/\//i.test(value);
@@ -401,6 +426,49 @@ const fetchMatchData = async (url) => {
 
 const preloadedResults = {};
 
+// --- SQLite helper functions ---
+const saveMatchToDb = (url, title, divisionData, stageData) => {
+  const upsertMatch = db.prepare("INSERT INTO matches (url, title) VALUES (?, ?) ON CONFLICT(url) DO UPDATE SET title = excluded.title, fetched_at = datetime('now')");
+  const deleteResults = db.prepare("DELETE FROM match_results WHERE match_id = ?");
+  const insertResult = db.prepare("INSERT INTO match_results (match_id, view, data) VALUES (?, ?, ?)");
+  const getMatch = db.prepare("SELECT id FROM matches WHERE url = ?");
+
+  const transaction = db.transaction(() => {
+    upsertMatch.run(url, title);
+    const match = getMatch.get(url);
+    deleteResults.run(match.id);
+    if (divisionData) {
+      for (const [viewName, records] of Object.entries(divisionData)) {
+        insertResult.run(match.id, viewName, JSON.stringify(records));
+      }
+    }
+    if (stageData && stageData.length > 0) {
+      insertResult.run(match.id, "combined", JSON.stringify(stageData));
+    }
+  });
+  transaction();
+};
+
+const loadMatchFromDb = (url) => {
+  const match = db.prepare("SELECT id, title FROM matches WHERE url = ?").get(url);
+  if (!match) return null;
+  const rows = db.prepare("SELECT view, data FROM match_results WHERE match_id = ?").all(match.id);
+  const data = {};
+  let stageData = null;
+  for (const row of rows) {
+    if (row.view === "combined") {
+      stageData = JSON.parse(row.data);
+    } else {
+      data[row.view] = JSON.parse(row.data);
+    }
+  }
+  return { title: match.title, data, stageData };
+};
+
+const listSavedMatches = () => {
+  return db.prepare("SELECT url, title, fetched_at FROM matches ORDER BY fetched_at DESC").all();
+};
+
 const filterOutSourceUrl = (records) => {
   return records.map((record) => {
     const filtered = { ...record };
@@ -689,6 +757,15 @@ app.post("/", async (req, res) => {
     }
     preloadedResults[matchUrl].shooterIds = [...new Set(preloadedResults[matchUrl].shooterIds)];
     console.log(`Total unique shooters: ${preloadedResults[matchUrl].shooterIds.length}`);
+
+    // Auto-save to SQLite
+    try {
+      saveMatchToDb(matchUrl, overview.title, preloadedResults[matchUrl].data, null);
+      console.log("Match saved to SQLite");
+    } catch (e) {
+      console.error("Failed to save to SQLite:", e.message);
+    }
+
     return res.render("index", {
       matchUrl,
       matchTitle: overview.title,
@@ -804,6 +881,13 @@ app.get("/combined", async (req, res) => {
       if (allRecords.length > 0) {
         console.log(`Combined calculated from stage HF data`);
         preloadedResults[matchUrl].stageData = allRecords;
+        // Save combined to SQLite
+        try {
+          saveMatchToDb(matchUrl, overview.title, preloadedResults[matchUrl].data, allRecords);
+          console.log("Combined results saved to SQLite");
+        } catch (e) {
+          console.error("Failed to save combined to SQLite:", e.message);
+        }
       } else {
         console.log(`Stage data was empty, falling back to Total Score ranking`);
       }
@@ -941,6 +1025,229 @@ app.get("/search", (req, res) => {
   }
 
   res.json(results);
+});
+
+// --- PDF Export ---
+app.get("/export/pdf", (req, res) => {
+  const matchUrl = req.query.matchUrl;
+  const view = req.query.view;
+  if (!matchUrl || !preloadedResults[matchUrl]) {
+    return res.status(400).send("No data available. Load a match first.");
+  }
+
+  let records = [];
+  let filename = "results";
+  const title = preloadedResults[matchUrl].title || "Match Results";
+
+  if (view === "combined" && preloadedResults[matchUrl].stageData) {
+    records = filterOutSourceUrl(preloadedResults[matchUrl].stageData);
+    filename = "combined";
+  } else if (preloadedResults[matchUrl].data && preloadedResults[matchUrl].data[view]) {
+    records = filterOutSourceUrl(preloadedResults[matchUrl].data[view]);
+    filename = view.replace(/\s+/g, "_").toLowerCase();
+  } else {
+    return res.status(404).send("No data for that view.");
+  }
+
+  if (records.length === 0) {
+    return res.status(404).send("No records.");
+  }
+
+  const columns = Object.keys(records[0]);
+  const matchTitleClean = title.replace(/[^a-zA-Z0-9 ]/g, "_");
+
+  const doc = new PDFDocument({ size: "A4", layout: "landscape", margin: 30 });
+  res.setHeader("Content-Type", "application/pdf");
+  res.setHeader("Content-Disposition", `attachment; filename="${matchTitleClean}_${filename}.pdf"`);
+  doc.pipe(res);
+
+  // Header
+  doc.fontSize(18).font("Helvetica-Bold").text(title, { align: "center" });
+  doc.fontSize(11).font("Helvetica").text(view === "combined" ? "Combined Results" : view, { align: "center" });
+  doc.moveDown(0.5);
+  doc.fontSize(8).fillColor("#666").text(`Generated: ${new Date().toLocaleString("sv-SE")}  |  ${records.length} competitors`, { align: "center" });
+  doc.moveDown(1);
+
+  // Table
+  const maxCols = Math.min(columns.length, 12);
+  const usedCols = columns.slice(0, maxCols);
+  const tableLeft = 30;
+  const tableWidth = 782; // A4 landscape - margins
+  const colWidth = tableWidth / usedCols.length;
+  const rowHeight = 16;
+  let y = doc.y;
+
+  // Header row
+  doc.fillColor("#1a3a5c").rect(tableLeft, y, tableWidth, rowHeight).fill();
+  doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7);
+  usedCols.forEach((col, i) => {
+    doc.text(col, tableLeft + i * colWidth + 3, y + 3, { width: colWidth - 6, lineBreak: false });
+  });
+  y += rowHeight;
+
+  // Data rows
+  doc.font("Helvetica").fontSize(7);
+  for (let r = 0; r < records.length; r++) {
+    if (y + rowHeight > doc.page.height - 30) {
+      doc.addPage();
+      y = 30;
+      // Repeat header
+      doc.fillColor("#1a3a5c").rect(tableLeft, y, tableWidth, rowHeight).fill();
+      doc.fillColor("#ffffff").font("Helvetica-Bold").fontSize(7);
+      usedCols.forEach((col, i) => {
+        doc.text(col, tableLeft + i * colWidth + 3, y + 3, { width: colWidth - 6, lineBreak: false });
+      });
+      y += rowHeight;
+      doc.font("Helvetica").fontSize(7);
+    }
+
+    if (r % 2 === 0) {
+      doc.fillColor("#f0f4f8").rect(tableLeft, y, tableWidth, rowHeight).fill();
+    }
+    doc.fillColor("#1a1a2e");
+    usedCols.forEach((col, i) => {
+      const val = String(records[r][col] == null ? "" : records[r][col]);
+      doc.text(val, tableLeft + i * colWidth + 3, y + 3, { width: colWidth - 6, lineBreak: false });
+    });
+    y += rowHeight;
+  }
+
+  // Footer
+  doc.moveDown(2);
+  doc.fontSize(7).fillColor("#999").text("Neon Scoreboard — https://github.com/trbobubbla/neon-scoreboard", { align: "center" });
+
+  doc.end();
+});
+
+// --- Match Comparison ---
+app.get("/compare", (req, res) => {
+  res.render("compare", {
+    matchUrl1: req.query.matchUrl1 || "",
+    matchUrl2: req.query.matchUrl2 || "",
+    comparison: null,
+    error: null,
+  });
+});
+
+app.post("/compare", async (req, res) => {
+  const matchUrl1 = (req.body.match_url_1 || "").trim();
+  const matchUrl2 = (req.body.match_url_2 || "").trim();
+
+  if (!matchUrl1 || !matchUrl2 || !isUrl(matchUrl1) || !isUrl(matchUrl2)) {
+    return res.render("compare", { matchUrl1, matchUrl2, comparison: null, error: "Ange två giltiga match-URLer." });
+  }
+
+  try {
+    // Load both matches (from memory, DB, or fetch)
+    const loadMatch = async (url) => {
+      if (preloadedResults[url] && preloadedResults[url].data && Object.keys(preloadedResults[url].data).length > 0) {
+        return preloadedResults[url];
+      }
+      // Try DB
+      const fromDb = loadMatchFromDb(url);
+      if (fromDb && Object.keys(fromDb.data).length > 0) {
+        preloadedResults[url] = { ...fromDb, divisionLinks: [], shooterIds: [] };
+        return preloadedResults[url];
+      }
+      // Fetch fresh
+      const overview = await fetchMatchOverview(url);
+      preloadedResults[url] = { title: overview.title, divisionLinks: overview.divisionLinks, data: {}, shooterIds: [] };
+      const results = await Promise.all(
+        overview.divisionLinks.map(async (div) => {
+          const { records, shooterIds } = await fetchDivisionData(url, div.name, div.url, div.relativeUrl);
+          return { name: div.name, records, shooterIds };
+        })
+      );
+      for (const r of results) {
+        preloadedResults[url].data[r.name] = r.records;
+      }
+      saveMatchToDb(url, overview.title, preloadedResults[url].data, null);
+      return preloadedResults[url];
+    };
+
+    const [match1, match2] = await Promise.all([loadMatch(matchUrl1), loadMatch(matchUrl2)]);
+
+    // Build shooter map: name -> { match1: data, match2: data }
+    const shooterMap = {};
+    const extractShooters = (matchData, matchKey) => {
+      for (const [divName, records] of Object.entries(matchData.data)) {
+        for (const record of records) {
+          const nameKey = Object.keys(record).find((k) => /shooter|name|competitor/i.test(k) && k !== "shooter_link");
+          const name = nameKey ? String(record[nameKey]).trim() : null;
+          if (!name) continue;
+          const key = name.toLowerCase();
+          if (!shooterMap[key]) shooterMap[key] = { name, match1: null, match2: null };
+          const scores = {
+            division: record.division || divName,
+            place: record["Place"] || "",
+            scorePercent: record["Score %"] || "",
+            totalScore: record["Total Score"] || "",
+            hitFactor: record["Hit Factor"] || record["HF"] || "",
+          };
+          shooterMap[key][matchKey] = scores;
+        }
+      }
+    };
+
+    extractShooters(match1, "match1");
+    extractShooters(match2, "match2");
+
+    // Find common shooters (appeared in both matches)
+    const common = Object.values(shooterMap).filter((s) => s.match1 && s.match2);
+    const onlyMatch1 = Object.values(shooterMap).filter((s) => s.match1 && !s.match2);
+    const onlyMatch2 = Object.values(shooterMap).filter((s) => !s.match1 && s.match2);
+
+    const comparison = {
+      match1: { title: match1.title, url: matchUrl1, shooterCount: Object.values(shooterMap).filter((s) => s.match1).length },
+      match2: { title: match2.title, url: matchUrl2, shooterCount: Object.values(shooterMap).filter((s) => s.match2).length },
+      common: common.sort((a, b) => a.name.localeCompare(b.name)),
+      onlyMatch1: onlyMatch1.sort((a, b) => a.name.localeCompare(b.name)),
+      onlyMatch2: onlyMatch2.sort((a, b) => a.name.localeCompare(b.name)),
+    };
+
+    return res.render("compare", { matchUrl1, matchUrl2, comparison, error: null });
+  } catch (error) {
+    return res.render("compare", { matchUrl1, matchUrl2, comparison: null, error: error.message });
+  }
+});
+
+// --- Match History (SQLite) ---
+app.get("/history", (req, res) => {
+  const matches = listSavedMatches();
+  res.render("history", { matches });
+});
+
+app.get("/history/load", async (req, res) => {
+  const url = req.query.url;
+  if (!url) return res.redirect("/history");
+
+  const match = loadMatchFromDb(url);
+  if (!match) return res.redirect("/?error=Match+not+found+in+database");
+
+  // Restore to preloadedResults
+  preloadedResults[url] = { title: match.title, divisionLinks: [], data: match.data, stageData: match.stageData, shooterIds: [] };
+
+  // Try to get division links from overview
+  try {
+    const overview = await fetchMatchOverview(url);
+    preloadedResults[url].divisionLinks = overview.divisionLinks;
+  } catch (e) {
+    // Build division links from saved data
+    preloadedResults[url].divisionLinks = Object.keys(match.data).map((name) => ({ name, url: "", relativeUrl: "" }));
+  }
+
+  const divisionLinks = preloadedResults[url].divisionLinks;
+  return res.render("index", {
+    matchUrl: url,
+    matchTitle: match.title,
+    divisionLinks,
+    selectedView: null,
+    sectionTitle: null,
+    error: null,
+    records: null,
+    summary: null,
+    isPreloaded: true,
+  });
 });
 
 const server = app.listen(port, () => {

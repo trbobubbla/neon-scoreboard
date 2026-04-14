@@ -62,6 +62,9 @@ The app will be running at **http://localhost:5000**
 3. Click **Launch** to load and preload all division results
 4. Click any **division button** to view that division's standings
 5. Click **Combined** to see the true cross-division ranking
+6. Use **Compare Matches** to compare shooter performances across two matches
+7. Use **Match History** to reload previously fetched matches from the local database
+8. Export results as **CSV** or **PDF** from the toolbar above the results table
 
 ## 🏗️ Architecture
 
@@ -69,7 +72,11 @@ The app will be running at **http://localhost:5000**
 neon-scoreboard/
 ├── app.js              # Express server, scraping logic, combined calculation
 ├── views/
-│   └── index.ejs       # Cyberpunk UI template (glassmorphism + neon)
+│   ├── index.ejs       # Main UI (glassmorphism + neon theme)
+│   ├── compare.ejs     # Match comparison view
+│   └── history.ejs     # SQLite match history view
+├── Dockerfile          # Docker container support
+├── results.db          # SQLite database (auto-created)
 ├── package.json        # Dependencies and scripts
 └── src/                # Legacy Python prototype (archived)
 ```
@@ -97,6 +104,8 @@ This produces **accurate cross-division combined results** that truly reflect ea
 | **Scraping** | Puppeteer Extra + Stealth Plugin |
 | **HTML Parsing** | Cheerio |
 | **HTTP** | Axios |
+| **Database** | SQLite (better-sqlite3) |
+| **PDF** | PDFKit |
 | **UI** | Custom CSS (glassmorphism, neon gradients, animations) |
 
 ## ⚙️ Configuration
@@ -127,12 +136,12 @@ Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) for gu
 ## 📋 Roadmap
 
 - [x] Export results to CSV
-- [ ] Export results to PDF
-- [ ] Match comparison (compare two match URLs)
+- [x] Export results to PDF
+- [x] Match comparison (compare two match URLs)
 - [x] Shooter search / table filter
 - [x] Dark/light theme toggle
 - [x] Docker container support
-- [ ] Persistent result storage (SQLite)
+- [x] Persistent result storage (SQLite)
 
 ## 📄 License
 
