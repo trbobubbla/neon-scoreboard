@@ -4,449 +4,389 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Neon Scoreboard — IPSC Match Results</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      --bg-primary: #0a0e27;
-      --bg-secondary: #1a0e3d;
-      --bg-container: rgba(20, 10, 50, 0.6);
-      --bg-input: rgba(10, 30, 60, 0.5);
-      --bg-input-focus: rgba(10, 30, 60, 0.8);
-      --text-primary: #e0e6ff;
-      --text-secondary: #b0c4ff;
-      --accent: #64d9ff;
-      --accent-glow: rgba(100, 217, 255, 0.5);
-      --border: rgba(100, 200, 255, 0.2);
-      --border-hover: rgba(100, 217, 255, 0.6);
-      --success: #00ff88;
-      --row-even: rgba(0, 0, 0, 0.2);
-      --row-hover: rgba(100, 217, 255, 0.1);
-      --table-header: linear-gradient(90deg, rgba(100, 217, 255, 0.15), rgba(0, 102, 255, 0.1));
+      --bg-primary: #0f1117;
+      --bg-secondary: #161822;
+      --bg-card: rgba(22, 24, 34, 0.95);
+      --bg-input: rgba(255, 255, 255, 0.04);
+      --bg-input-focus: rgba(255, 255, 255, 0.08);
+      --text-primary: #eaedf3;
+      --text-secondary: #8b92a5;
+      --text-muted: #555d70;
+      --accent: #3b82f6;
+      --accent-hover: #60a5fa;
+      --accent-subtle: rgba(59, 130, 246, 0.1);
+      --accent-glow: rgba(59, 130, 246, 0.25);
+      --border: rgba(255, 255, 255, 0.06);
+      --border-hover: rgba(255, 255, 255, 0.12);
+      --success: #22c55e;
+      --success-subtle: rgba(34, 197, 94, 0.1);
+      --row-even: rgba(255, 255, 255, 0.02);
+      --row-hover: rgba(59, 130, 246, 0.06);
+      --table-header-bg: rgba(255, 255, 255, 0.03);
+      --shadow: 0 1px 3px rgba(0,0,0,0.3), 0 4px 20px rgba(0,0,0,0.2);
+      --radius: 12px;
     }
     [data-theme="light"] {
-      --bg-primary: #f0f4f8;
-      --bg-secondary: #e2e8f0;
-      --bg-container: rgba(255, 255, 255, 0.9);
-      --bg-input: rgba(240, 244, 248, 0.8);
-      --bg-input-focus: rgba(255, 255, 255, 1);
-      --text-primary: #1a202c;
-      --text-secondary: #4a5568;
-      --accent: #0066ff;
-      --accent-glow: rgba(0, 102, 255, 0.3);
-      --border: rgba(0, 102, 255, 0.2);
-      --border-hover: rgba(0, 102, 255, 0.5);
-      --success: #059669;
-      --row-even: rgba(0, 102, 255, 0.04);
-      --row-hover: rgba(0, 102, 255, 0.08);
-      --table-header: linear-gradient(90deg, rgba(0, 102, 255, 0.08), rgba(0, 102, 255, 0.04));
+      --bg-primary: #f8f9fb;
+      --bg-secondary: #ffffff;
+      --bg-card: rgba(255, 255, 255, 0.98);
+      --bg-input: rgba(0, 0, 0, 0.03);
+      --bg-input-focus: rgba(0, 0, 0, 0.05);
+      --text-primary: #111827;
+      --text-secondary: #6b7280;
+      --text-muted: #9ca3af;
+      --accent: #2563eb;
+      --accent-hover: #3b82f6;
+      --accent-subtle: rgba(37, 99, 235, 0.06);
+      --accent-glow: rgba(37, 99, 235, 0.15);
+      --border: rgba(0, 0, 0, 0.06);
+      --border-hover: rgba(0, 0, 0, 0.12);
+      --success: #16a34a;
+      --success-subtle: rgba(22, 163, 74, 0.06);
+      --row-even: rgba(0, 0, 0, 0.015);
+      --row-hover: rgba(37, 99, 235, 0.04);
+      --table-header-bg: rgba(0, 0, 0, 0.02);
+      --shadow: 0 1px 3px rgba(0,0,0,0.05), 0 4px 20px rgba(0,0,0,0.04);
     }
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body {
-      font-family: 'Segoe UI', 'Helvetica Neue', sans-serif;
-      background: linear-gradient(135deg, var(--bg-primary) 0%, var(--bg-secondary) 100%);
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      background: var(--bg-primary);
       color: var(--text-primary);
       min-height: 100vh;
-      padding: 20px;
-      transition: background 0.4s, color 0.4s;
-    }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-      background: var(--bg-container);
-      backdrop-filter: blur(20px);
-      border: 1px solid var(--border);
-      border-radius: 20px;
-      padding: 40px;
-      box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3), inset 0 1px 1px rgba(255, 255, 255, 0.1);
-      animation: slideIn 0.6s ease-out;
-      transition: background 0.4s, border-color 0.4s;
-    }
-    @keyframes slideIn {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-    h1 {
-      font-size: 3em;
-      font-weight: 700;
-      background: linear-gradient(120deg, #64d9ff, #0066ff, #ff00ff, #64d9ff);
-      background-size: 300% 300%;
-      -webkit-background-clip: text;
-      -webkit-text-fill-color: transparent;
-      background-clip: text;
-      margin-bottom: 10px;
-      animation: gradient 8s ease infinite;
-    }
-    @keyframes gradient {
-      0% { background-position: 0% 50%; }
-      50% { background-position: 100% 50%; }
-      100% { background-position: 0% 50%; }
-    }
-    h2 { font-size: 1.8em; color: var(--accent); margin-top: 30px; margin-bottom: 20px; font-weight: 600; }
-    h3 { font-size: 1.3em; color: var(--accent); margin-top: 20px; margin-bottom: 12px; }
-    p { font-size: 1.05em; margin-bottom: 15px; color: var(--text-secondary); }
-    label { display: block; margin-bottom: 10px; font-weight: 600; color: var(--accent); font-size: 0.95em; }
-    input[type=url] {
-      width: 100%;
-      padding: 14px 18px;
-      border: 2px solid var(--border);
-      border-radius: 10px;
-      background: var(--bg-input);
-      color: var(--text-primary);
-      font-size: 1em;
-      margin-bottom: 18px;
-      transition: all 0.3s;
-      font-family: inherit;
-    }
-    input[type=url]:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 20px var(--accent-glow);
-      background: var(--bg-input-focus);
-    }
-    button {
-      background: linear-gradient(135deg, #0066ff, #00d4ff);
-      color: #fff;
-      padding: 14px 30px;
-      border: none;
-      border-radius: 10px;
-      cursor: pointer;
-      font-size: 1em;
-      font-weight: 600;
-      transition: all 0.3s;
-      box-shadow: 0 4px 15px rgba(0, 102, 255, 0.4);
-    }
-    button:hover {
-      transform: translateY(-2px);
-      box-shadow: 0 6px 25px rgba(0, 102, 255, 0.6);
-    }
-    button:active {
-      transform: translateY(0);
-    }
-    .alert {
-      border-radius: 12px;
-      padding: 20px;
-      margin: 20px 0;
-      border: 2px solid #ff4444;
-      background: rgba(255, 68, 68, 0.1);
-      color: #ff9999;
-    }
-    .division-buttons {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
-      gap: 12px;
-      margin-top: 18px;
-    }
-    .div-btn {
-      display: inline-block;
-      padding: 12px 16px;
-      border-radius: 10px;
-      background: linear-gradient(135deg, rgba(100, 217, 255, 0.2), rgba(0, 102, 255, 0.2));
-      color: var(--accent);
-      text-decoration: none;
-      border: 2px solid var(--border-hover);
-      font-weight: 600;
-      transition: all 0.3s;
-      text-align: center;
-      cursor: pointer;
-    }
-    .div-btn:hover {
-      border-color: var(--accent);
-      background: linear-gradient(135deg, rgba(100, 217, 255, 0.4), rgba(0, 102, 255, 0.3));
-      box-shadow: 0 0 15px var(--accent-glow);
-      transform: translateY(-3px);
-    }
-    .combined-btn {
-      background: linear-gradient(135deg, rgba(0, 255, 136, 0.2), rgba(0, 200, 100, 0.2));
-      color: var(--success);
-      border-color: rgba(0, 255, 136, 0.4);
-    }
-    .combined-btn:hover {
-      border-color: var(--success);
-      background: linear-gradient(135deg, rgba(0, 255, 136, 0.4), rgba(0, 200, 100, 0.3));
-      box-shadow: 0 0 15px rgba(0, 255, 136, 0.5);
-    }
-    .summary-grid {
-      display: grid;
-      gap: 16px;
-      grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
-      margin-top: 20px;
-    }
-    .card {
-      background: linear-gradient(135deg, rgba(100, 217, 255, 0.1), rgba(0, 102, 255, 0.05));
-      border: 2px solid rgba(100, 217, 255, 0.2);
-      border-radius: 12px;
-      padding: 20px;
-      text-align: center;
-      transition: all 0.3s;
-    }
-    .card:hover {
-      border-color: rgba(100, 217, 255, 0.6);
-      box-shadow: 0 0 20px rgba(100, 217, 255, 0.3);
-      transform: translateY(-5px);
-    }
-    .card strong { color: var(--accent); font-size: 0.9em; display: block; margin-bottom: 8px; }
-    .card div { font-size: 1.8em; color: var(--success); font-weight: 700; }
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 24px;
-      font-size: 0.95em;
-      overflow-x: auto;
-    }
-    th, td {
-      border: 1px solid var(--border);
-      padding: 12px;
-      text-align: left;
-    }
-    th {
-      background: var(--table-header);
-      color: var(--accent);
-      font-weight: 600;
-      position: sticky;
-      top: 0;
-    }
-    tbody tr {
-      transition: all 0.2s;
-    }
-    tbody tr:hover {
-      background: var(--row-hover);
-    }
-    tbody tr:nth-child(even) {
-      background: var(--row-even);
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+      transition: background 0.3s, color 0.3s;
     }
 
-    .preload-badge {
-      display: inline-block;
-      background: linear-gradient(135deg, #00ff88, #00d4ff);
-      color: #0a0e27;
-      padding: 6px 12px;
-      border-radius: 20px;
-      font-size: 0.8em;
-      font-weight: 700;
-      margin-left: 10px;
-      animation: pulse 2s ease-in-out infinite;
+    /* Top Navigation Bar */
+    .topnav {
+      position: sticky; top: 0; z-index: 100;
+      background: var(--bg-secondary);
+      border-bottom: 1px solid var(--border);
+      backdrop-filter: blur(16px);
+      padding: 0 24px;
     }
-    @keyframes pulse {
-      0%, 100% { opacity: 1; }
-      50% { opacity: 0.6; }
+    .topnav-inner {
+      max-width: 1440px; margin: 0 auto;
+      display: flex; align-items: center; justify-content: space-between;
+      height: 56px;
     }
-    /* Loading overlay */
-    .loading-overlay {
-      display: none;
-      position: fixed;
-      top: 0; left: 0; right: 0; bottom: 0;
-      background: rgba(5, 5, 20, 0.85);
-      backdrop-filter: blur(8px);
-      z-index: 9999;
-      justify-content: center;
-      align-items: center;
-      flex-direction: column;
-      gap: 24px;
+    .topnav-brand {
+      display: flex; align-items: center; gap: 10px;
+      text-decoration: none; color: var(--text-primary);
+      font-weight: 700; font-size: 1.05em; letter-spacing: -0.01em;
     }
-    .loading-overlay.active {
-      display: flex;
+    .topnav-brand svg { width: 22px; height: 22px; }
+    .topnav-links {
+      display: flex; align-items: center; gap: 6px;
     }
-    .loading-spinner {
-      width: 60px;
-      height: 60px;
-      border: 4px solid rgba(100, 217, 255, 0.15);
-      border-top-color: #64d9ff;
-      border-radius: 50%;
-      animation: spin 0.8s linear infinite;
+    .topnav-link {
+      padding: 6px 12px; border-radius: 8px; font-size: 0.875em;
+      color: var(--text-secondary); text-decoration: none; font-weight: 500;
+      transition: all 0.15s;
     }
-    @keyframes spin {
-      to { transform: rotate(360deg); }
-    }
-    .loading-text {
-      font-size: 1.3em;
-      font-weight: 600;
-      color: var(--accent);
-      text-align: center;
-      animation: pulse 2s ease-in-out infinite;
-    }
-    .loading-sub {
-      font-size: 0.9em;
-      color: var(--text-secondary);
-      opacity: 0.7;
-    }
-    /* Theme toggle */
-    .top-bar {
-      display: flex;
-      justify-content: flex-end;
-      align-items: center;
-      gap: 12px;
-      margin-bottom: 16px;
-    }
+    .topnav-link:hover { color: var(--text-primary); background: var(--bg-input); }
     .theme-toggle {
-      background: var(--bg-input);
-      border: 2px solid var(--border);
-      color: var(--text-primary);
-      padding: 8px 16px;
-      border-radius: 8px;
-      cursor: pointer;
-      font-size: 0.9em;
-      font-weight: 600;
-      transition: all 0.3s;
-      box-shadow: none;
+      background: none; border: 1px solid var(--border);
+      color: var(--text-secondary); padding: 6px 10px;
+      border-radius: 8px; cursor: pointer; font-size: 0.85em;
+      transition: all 0.15s; line-height: 1;
     }
-    .theme-toggle:hover {
-      border-color: var(--accent);
-      box-shadow: 0 0 10px var(--accent-glow);
-      transform: translateY(-1px);
+    .theme-toggle:hover { border-color: var(--border-hover); color: var(--text-primary); }
+
+    /* Main Content */
+    .main { max-width: 1440px; margin: 0 auto; padding: 32px 24px; }
+
+    /* Hero / Input Section */
+    .hero {
+      max-width: 640px; margin: 0 auto 40px;
+      text-align: center;
     }
-    /* Toolbar (search + export) */
-    .toolbar {
-      display: flex;
-      gap: 12px;
-      align-items: center;
-      flex-wrap: wrap;
-      margin-bottom: 16px;
+    .hero h1 {
+      font-size: 2em; font-weight: 700; letter-spacing: -0.03em;
+      margin-bottom: 8px; color: var(--text-primary);
     }
-    .search-box {
-      flex: 1;
-      min-width: 200px;
-      padding: 10px 14px;
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      background: var(--bg-input);
-      color: var(--text-primary);
-      font-size: 0.95em;
-      font-family: inherit;
-      transition: all 0.3s;
+    .hero p { color: var(--text-secondary); font-size: 0.95em; margin-bottom: 24px; }
+    .input-group {
+      display: flex; gap: 8px;
     }
-    .search-box:focus {
-      outline: none;
-      border-color: var(--accent);
-      box-shadow: 0 0 15px var(--accent-glow);
+    .input-group input[type=url] {
+      flex: 1; padding: 10px 16px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg-input); color: var(--text-primary);
+      font-size: 0.95em; font-family: inherit;
+      transition: all 0.15s;
+    }
+    .input-group input[type=url]:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
       background: var(--bg-input-focus);
     }
-    .toolbar-btn {
-      display: inline-flex;
-      align-items: center;
-      gap: 6px;
-      padding: 10px 18px;
-      border-radius: 8px;
-      border: 2px solid var(--border);
-      background: var(--bg-input);
+    .input-group input[type=url]::placeholder { color: var(--text-muted); }
+    .btn-primary {
+      padding: 10px 24px; border: none; border-radius: 10px;
+      background: var(--accent); color: #fff;
+      font-size: 0.95em; font-weight: 600; font-family: inherit;
+      cursor: pointer; transition: all 0.15s; white-space: nowrap;
+    }
+    .btn-primary:hover { background: var(--accent-hover); }
+
+    /* Alert */
+    .alert {
+      max-width: 640px; margin: -16px auto 32px;
+      padding: 12px 16px; border-radius: var(--radius);
+      background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2);
+      color: #f87171; font-size: 0.9em;
+    }
+
+    /* Match Header */
+    .match-header {
+      display: flex; align-items: center; gap: 12px; flex-wrap: wrap;
+      margin-bottom: 24px;
+    }
+    .match-header h2 {
+      font-size: 1.5em; font-weight: 700; letter-spacing: -0.02em;
+      color: var(--text-primary); margin: 0;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px;
+      font-size: 0.75em; font-weight: 600;
+    }
+    .badge-success { background: var(--success-subtle); color: var(--success); }
+    .btn-icon {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 32px; height: 32px; border-radius: 8px;
+      background: var(--bg-input); border: 1px solid var(--border);
+      color: var(--text-secondary); cursor: pointer;
+      font-size: 0.85em; transition: all 0.15s;
+    }
+    .btn-icon:hover { border-color: var(--border-hover); color: var(--text-primary); background: var(--bg-input-focus); }
+
+    /* Division Grid */
+    .section-label {
+      font-size: 0.75em; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted); margin-bottom: 12px;
+    }
+    .division-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+      gap: 8px; margin-bottom: 32px;
+    }
+    .div-btn {
+      display: flex; align-items: center; justify-content: center;
+      padding: 10px 14px; border-radius: 10px;
+      background: var(--bg-input); border: 1px solid var(--border);
+      color: var(--text-primary); text-decoration: none;
+      font-weight: 500; font-size: 0.9em;
+      transition: all 0.15s; text-align: center;
+    }
+    .div-btn:hover {
+      border-color: var(--accent); background: var(--accent-subtle);
       color: var(--accent);
-      font-weight: 600;
-      font-size: 0.9em;
-      cursor: pointer;
-      text-decoration: none;
-      transition: all 0.3s;
-      box-shadow: none;
+    }
+    .combined-btn {
+      border-color: rgba(34, 197, 94, 0.2);
+      color: var(--success); font-weight: 600;
+    }
+    .combined-btn:hover {
+      border-color: var(--success); background: var(--success-subtle);
+    }
+
+    /* View Header */
+    .view-tag {
+      display: inline-block; padding: 2px 8px; border-radius: 6px;
+      font-size: 0.7em; font-weight: 600; vertical-align: middle;
+      margin-left: 8px;
+    }
+    .view-tag-division { background: var(--accent-subtle); color: var(--accent); }
+    .view-tag-combined { background: var(--success-subtle); color: var(--success); }
+
+    /* Toolbar */
+    .toolbar {
+      display: flex; gap: 8px; align-items: center;
+      flex-wrap: wrap; margin-bottom: 16px;
+    }
+    .search-wrap { position: relative; flex: 1; min-width: 200px; }
+    .search-box {
+      width: 100%; padding: 9px 14px 9px 36px;
+      border: 1px solid var(--border); border-radius: 10px;
+      background: var(--bg-input); color: var(--text-primary);
+      font-size: 0.9em; font-family: inherit; transition: all 0.15s;
+    }
+    .search-box:focus {
+      outline: none; border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-glow);
+    }
+    .search-box::placeholder { color: var(--text-muted); }
+    .search-icon {
+      position: absolute; left: 12px; top: 50%; transform: translateY(-50%);
+      color: var(--text-muted); font-size: 0.85em; pointer-events: none;
+    }
+    .toolbar-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 9px 16px; border-radius: 10px;
+      border: 1px solid var(--border); background: var(--bg-input);
+      color: var(--text-secondary); font-weight: 500; font-size: 0.85em;
+      cursor: pointer; text-decoration: none; transition: all 0.15s;
     }
     .toolbar-btn:hover {
-      border-color: var(--accent);
-      box-shadow: 0 0 10px var(--accent-glow);
-      transform: translateY(-1px);
+      border-color: var(--border-hover); color: var(--text-primary); background: var(--bg-input-focus);
     }
+
+    /* Competitor Count */
+    .result-meta {
+      font-size: 0.85em; color: var(--text-muted); margin-bottom: 12px;
+    }
+
+    /* Table */
+    .table-wrap {
+      border: 1px solid var(--border); border-radius: var(--radius);
+      overflow: hidden; margin-bottom: 32px;
+    }
+    .table-scroll { overflow-x: auto; }
+    table { width: 100%; border-collapse: collapse; font-size: 0.875em; }
+    th, td { padding: 10px 14px; text-align: left; white-space: nowrap; }
+    th {
+      background: var(--table-header-bg); color: var(--text-secondary);
+      font-weight: 600; font-size: 0.8em; text-transform: uppercase;
+      letter-spacing: 0.04em; border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 1;
+    }
+    td { border-bottom: 1px solid var(--border); color: var(--text-primary); }
+    tbody tr { transition: background 0.1s; }
+    tbody tr:hover { background: var(--row-hover); }
+    tbody tr:nth-child(even) { background: var(--row-even); }
+    tbody tr:nth-child(even):hover { background: var(--row-hover); }
+    tbody tr:last-child td { border-bottom: none; }
+
+    /* Loading Overlay */
+    .loading-overlay {
+      display: none; position: fixed; inset: 0;
+      background: rgba(0, 0, 0, 0.7); backdrop-filter: blur(6px);
+      z-index: 9999; justify-content: center; align-items: center;
+      flex-direction: column; gap: 20px;
+    }
+    .loading-overlay.active { display: flex; }
+    .loading-spinner {
+      width: 40px; height: 40px;
+      border: 3px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.7s linear infinite;
+    }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .loading-text { font-size: 1.1em; font-weight: 600; color: var(--text-primary); }
+    .loading-sub { font-size: 0.85em; color: var(--text-muted); }
+
+    /* Search Results Dropdown */
     .search-results {
-      position: absolute;
-      top: 100%;
-      left: 0;
-      right: 0;
-      background: var(--bg-container);
-      border: 2px solid var(--border);
-      border-radius: 8px;
-      max-height: 300px;
-      overflow-y: auto;
-      z-index: 100;
-      display: none;
-      backdrop-filter: blur(20px);
+      position: absolute; top: 100%; left: 0; right: 0;
+      background: var(--bg-card); border: 1px solid var(--border);
+      border-radius: 10px; max-height: 280px; overflow-y: auto;
+      z-index: 100; display: none; margin-top: 4px;
+      box-shadow: var(--shadow);
     }
     .search-results.active { display: block; }
     .search-result-item {
-      padding: 10px 14px;
-      border-bottom: 1px solid var(--border);
-      cursor: pointer;
-      transition: background 0.2s;
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      cursor: pointer; transition: background 0.1s;
     }
     .search-result-item:hover { background: var(--row-hover); }
     .search-result-item:last-child { border-bottom: none; }
-    .search-result-name { font-weight: 600; color: var(--text-primary); }
-    .search-result-meta { font-size: 0.85em; color: var(--text-secondary); }
-    .search-wrap { position: relative; flex: 1; min-width: 200px; }
+    .search-result-name { font-weight: 600; color: var(--text-primary); font-size: 0.9em; }
+    .search-result-meta { font-size: 0.8em; color: var(--text-secondary); }
+
     @media (max-width: 768px) {
-      .container { padding: 25px; }
-      h1 { font-size: 2em; }
-      h2 { font-size: 1.4em; }
-      input[type=url], button { font-size: 0.95em; padding: 12px 20px; }
-      .division-buttons { grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; }
-      table { font-size: 0.85em; }
-      th, td { padding: 8px; }
+      .main { padding: 20px 16px; }
+      .hero h1 { font-size: 1.5em; }
+      .input-group { flex-direction: column; }
+      .division-grid { grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); }
+      table { font-size: 0.8em; }
+      th, td { padding: 8px 10px; }
       .toolbar { flex-direction: column; }
+      .topnav-inner { padding: 0; }
     }
   </style>
 </head>
 <body>
-  <!-- Loading overlay -->
   <div class="loading-overlay" id="loadingOverlay">
     <div class="loading-spinner"></div>
     <div class="loading-text" id="loadingText">Loading...</div>
     <div class="loading-sub" id="loadingSub">This may take a moment</div>
   </div>
 
-  <div class="container">
-    <div class="top-bar">
-      <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙 Dark</button>
+  <nav class="topnav">
+    <div class="topnav-inner">
+      <a href="/" class="topnav-brand">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="m8 12 3 3 5-5"/></svg>
+        Neon Scoreboard
+      </a>
+      <div class="topnav-links">
+        <a href="/history" class="topnav-link">History</a>
+        <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙</button>
+      </div>
     </div>
-    <a href="/" style="text-decoration: none; color: inherit;"><h1>⚡ Neon Scoreboard</h1></a>
-    <p>Enter match URL and unleash the competition data</p>
-    <div style="margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap;">
-      <a href="/history" style="color: var(--accent); text-decoration: none; font-weight: 600;">📚 Match History</a>
-    </div>
+  </nav>
 
-    <form method="post">
-      <label for="match_url">Match Link</label>
-      <input id="match_url" name="match_url" type="url" placeholder="https://portal.ipscess.org/portal/match/..." value="<%= matchUrl %>" required>
-      <button type="submit">⚡ Launch</button>
-    </form>
+  <div class="main">
+    <div class="hero">
+      <h1>IPSC Match Results</h1>
+      <p>Paste a match URL from ESSPortal to view detailed results</p>
+      <form method="post">
+        <div class="input-group">
+          <input id="match_url" name="match_url" type="url" placeholder="https://portal.ipscess.org/portal/match/..." value="<%= matchUrl %>" required>
+          <button type="submit" class="btn-primary">Load Match</button>
+        </div>
+      </form>
+    </div>
 
     <% if (error) { %>
-      <div class="alert">❌ <%= error %></div>
+      <div class="alert"><%= error %></div>
     <% } %>
 
     <% if (matchTitle) { %>
-      <h2 style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;"><%= matchTitle %><% if (typeof isPreloaded !== 'undefined' && isPreloaded) { %><span class="preload-badge">✓ Preloaded</span><% } %><button onclick="reloadMatch()" style="background: var(--accent); color: #000; border: none; padding: 4px 12px; border-radius: 6px; font-size: 0.6em; cursor: pointer; font-weight: 600;" title="Reload match data">🔄 Reload</button></h2>
+      <div class="match-header">
+        <h2><%= matchTitle %></h2>
+        <% if (typeof isPreloaded !== 'undefined' && isPreloaded) { %>
+          <span class="badge badge-success">Loaded</span>
+        <% } %>
+        <button class="btn-icon" onclick="reloadMatch()" title="Reload match data">&#x21bb;</button>
+      </div>
     <% } %>
 
     <% if (divisionLinks && divisionLinks.length) { %>
-      <div style="margin-top: 30px;">
-        <h3>🏆 Select Division</h3>
-        <div class="division-buttons">
-          <% divisionLinks.forEach((division) => { %>
-            <a href="/division?matchUrl=<%= encodeURIComponent(matchUrl) %>&divisionUrl=<%= encodeURIComponent(division.url) %>&divisionName=<%= encodeURIComponent(division.name) %>" class="div-btn"><%= division.name %></a>
-          <% }); %>
-          <a href="/combined?matchUrl=<%= encodeURIComponent(matchUrl) %>" class="div-btn combined-btn">📊 Combined</a>
-        </div>
+      <div class="section-label">Divisions</div>
+      <div class="division-grid">
+        <% divisionLinks.forEach((division) => { %>
+          <a href="/division?matchUrl=<%= encodeURIComponent(matchUrl) %>&divisionUrl=<%= encodeURIComponent(division.url) %>&divisionName=<%= encodeURIComponent(division.name) %>" class="div-btn"><%= division.name %></a>
+        <% }); %>
+        <a href="/combined?matchUrl=<%= encodeURIComponent(matchUrl) %>" class="div-btn combined-btn">Combined</a>
       </div>
     <% } %>
 
     <% if (selectedView) { %>
-      <h2 style="margin-top: 30px;"><%= sectionTitle %> <small style="font-size: 0.7em; color: #64d9ff; opacity: 0.8;">[<%= selectedView === 'combined' ? '🌐 Combined' : '📍 Division' %>]</small></h2>
+      <div class="match-header" style="margin-top: 8px;">
+        <h2><%= sectionTitle %><span class="view-tag <%= selectedView === 'combined' ? 'view-tag-combined' : 'view-tag-division' %>"><%= selectedView === 'combined' ? 'Combined' : 'Division' %></span></h2>
+      </div>
     <% } %>
 
-    <% if (summary) { %>
-      <h2 style="margin-top: 30px;">📈 Statistics</h2>
-      <div class="summary-grid">
-        <div class="card"><strong>Competitors</strong><div><%= summary.row_count %></div></div>
-        <div class="card"><strong>Fields</strong><div><%= summary.columns.length %></div></div>
-        <% if (summary.unique_matches !== undefined) { %>
-          <div class="card"><strong>Unique Matches</strong><div><%= summary.unique_matches %></div></div>
-        <% } %>
-      </div>
-
-      <% if (records && records.length) { %>
-        <h2 style="margin-top: 30px;">🎯 Results</h2>
-        <div class="toolbar">
-          <div class="search-wrap">
-            <input type="text" class="search-box" id="tableSearch" placeholder="🔍 Filter results..." autocomplete="off">
-            <div class="search-results" id="searchResults"></div>
-          </div>
-          <a class="toolbar-btn" href="/export/csv?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">📥 CSV</a>
-          <a class="toolbar-btn" href="/export/pdf?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">📄 PDF</a>
+    <% if (records && records.length) { %>
+      <div class="toolbar">
+        <div class="search-wrap">
+          <span class="search-icon">&#x1F50D;</span>
+          <input type="text" class="search-box" id="tableSearch" placeholder="Filter results..." autocomplete="off">
+          <div class="search-results" id="searchResults"></div>
         </div>
-        <div style="overflow-x: auto;">
+        <a class="toolbar-btn" href="/export/csv?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">CSV</a>
+        <a class="toolbar-btn" href="/export/pdf?matchUrl=<%= encodeURIComponent(matchUrl) %>&view=<%= selectedView %><%= selectedView !== 'combined' && typeof divisionUrl !== 'undefined' ? '&divisionUrl=' + encodeURIComponent(divisionUrl) : '' %>">PDF</a>
+      </div>
+      <div class="result-meta"><%= records.length %> competitors</div>
+      <div class="table-wrap">
+        <div class="table-scroll">
         <table>
           <thead>
             <tr>
@@ -483,7 +423,7 @@
           </tbody>
         </table>
         </div>
-      <% } %>
+      </div>
     <% } %>
   </div>
 
@@ -501,24 +441,22 @@
     function reloadMatch() {
       const urlInput = document.getElementById('match_url');
       if (!urlInput || !urlInput.value) return;
-      showLoading('🔄 Reloading match data...', 'Fetching fresh data from ESSPortal');
+      showLoading('Reloading match data...', 'Fetching fresh data from ESSPortal');
       const form = document.querySelector('form');
       if (form) form.submit();
     }
 
-    // Form submit (Launch button)
     const form = document.querySelector('form');
     if (form) {
       form.addEventListener('submit', function(e) {
         const url = document.getElementById('match_url').value;
         if (!url) return;
-        showLoading('⚡ Fetching match data...', 'Connecting to ESSPortal and preloading all divisions');
-        // Cycle through status messages
+        showLoading('Loading match data...', 'Connecting to ESSPortal');
         const messages = [
-          ['⏳ Loading match overview...', 'Parsing match page'],
-          ['📡 Fetching divisions...', 'Launching headless browser for each division'],
-          ['🔄 Still working...', 'Large matches may take a while'],
-          ['⚙️ Almost there...', 'Parsing results and collecting shooter data'],
+          ['Loading match overview...', 'Parsing match page'],
+          ['Fetching divisions...', 'Launching headless browser for each division'],
+          ['Still working...', 'Large matches may take a while'],
+          ['Almost there...', 'Parsing results and collecting shooter data'],
         ];
         let i = 0;
         setInterval(function() {
@@ -531,44 +469,37 @@
       });
     }
 
-    // Division and Combined links
     document.querySelectorAll('.div-btn').forEach(function(btn) {
-      btn.addEventListener('click', function(e) {
+      btn.addEventListener('click', function() {
         const isCombined = btn.classList.contains('combined-btn');
         const name = btn.textContent.trim();
-        if (isCombined) {
-          showLoading('📊 Loading combined results...', 'Aggregating all divisions and calculating rankings');
-        } else {
-          showLoading('🎯 Loading ' + name + '...', 'Fetching division results');
-        }
+        showLoading(isCombined ? 'Loading combined results...' : 'Loading ' + name + '...', isCombined ? 'Aggregating all divisions' : 'Fetching division results');
       });
     });
   </script>
 
   <script>
-    // Theme toggle
     (function() {
       const toggle = document.getElementById('themeToggle');
       const saved = localStorage.getItem('theme') || 'dark';
       if (saved === 'light') {
         document.documentElement.setAttribute('data-theme', 'light');
-        toggle.textContent = '☀️ Light';
+        toggle.textContent = '☀️';
       }
       toggle.addEventListener('click', function() {
         const current = document.documentElement.getAttribute('data-theme');
         if (current === 'light') {
           document.documentElement.removeAttribute('data-theme');
           localStorage.setItem('theme', 'dark');
-          toggle.textContent = '🌙 Dark';
+          toggle.textContent = '🌙';
         } else {
           document.documentElement.setAttribute('data-theme', 'light');
           localStorage.setItem('theme', 'light');
-          toggle.textContent = '☀️ Light';
+          toggle.textContent = '☀️';
         }
       });
     })();
 
-    // Table search / filter
     (function() {
       const input = document.getElementById('tableSearch');
       if (!input) return;
@@ -577,12 +508,10 @@
       const tbody = table.querySelector('tbody');
       if (!tbody) return;
       const rows = Array.from(tbody.querySelectorAll('tr'));
-
       input.addEventListener('input', function() {
         const q = this.value.toLowerCase().trim();
         rows.forEach(function(row) {
-          const text = row.textContent.toLowerCase();
-          row.style.display = q === '' || text.includes(q) ? '' : 'none';
+          row.style.display = q === '' || row.textContent.toLowerCase().includes(q) ? '' : 'none';
         });
       });
     })();
