@@ -390,7 +390,7 @@
     <div class="top-bar">
       <button class="theme-toggle" id="themeToggle" title="Toggle theme">🌙 Dark</button>
     </div>
-    <h1>⚡ Neon Scoreboard</h1>
+    <a href="/" style="text-decoration: none; color: inherit;"><h1>⚡ Neon Scoreboard</h1></a>
     <p>Enter match URL and unleash the competition data</p>
     <div style="margin-bottom: 20px; display: flex; gap: 16px; flex-wrap: wrap;">
       <a href="/history" style="color: var(--accent); text-decoration: none; font-weight: 600;">📚 Match History</a>
@@ -407,7 +407,7 @@
     <% } %>
 
     <% if (matchTitle) { %>
-      <h2><%= matchTitle %><% if (typeof isPreloaded !== 'undefined' && isPreloaded) { %><span class="preload-badge">✓ Preloaded</span><% } %></h2>
+      <h2 style="display: flex; align-items: center; gap: 12px; flex-wrap: wrap;"><%= matchTitle %><% if (typeof isPreloaded !== 'undefined' && isPreloaded) { %><span class="preload-badge">✓ Preloaded</span><% } %><button onclick="reloadMatch()" style="background: var(--accent); color: #000; border: none; padding: 4px 12px; border-radius: 6px; font-size: 0.6em; cursor: pointer; font-weight: 600;" title="Reload match data">🔄 Reload</button></h2>
     <% } %>
 
     <% if (divisionLinks && divisionLinks.length) { %>
@@ -496,6 +496,14 @@
       loadingText.textContent = text;
       loadingSub.textContent = sub || 'This may take a moment';
       overlay.classList.add('active');
+    }
+
+    function reloadMatch() {
+      const urlInput = document.getElementById('match_url');
+      if (!urlInput || !urlInput.value) return;
+      showLoading('🔄 Reloading match data...', 'Fetching fresh data from ESSPortal');
+      const form = document.querySelector('form');
+      if (form) form.submit();
     }
 
     // Form submit (Launch button)
