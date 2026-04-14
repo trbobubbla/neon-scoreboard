@@ -48,7 +48,7 @@ const parseHtmlTable = (table, $) => {
 const parseKeyValueList = ($, selector) => {
   const records = [];
   $(selector).each((_, node) => {
-    const text = cheerio(node).text().trim();
+    const text = $(node).text().trim();
     const parts = text.split(":");
     if (parts.length >= 2) {
       const field = parts.shift().trim();
