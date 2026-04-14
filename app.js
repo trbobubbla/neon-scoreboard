@@ -226,8 +226,85 @@ const fetchDivisionData = async (matchUrl, divisionName, divisionUrl, divisionRe
         }
       });
       console.log(`Division ${divisionName}: extracted ${shooterIds.size} shooter IDs from ${records.length} records`);
+
+      // Also fetch stage view in the same browser session for Total Time
+      let stageDataForDiv = [];
+      try {
+        const relPath = divisionRelativeUrl || getRelativePath(divisionUrl);
+        const stageUrl = relPath + (relPath.includes('?') ? '&' : '?') + 'group=stage';
+        console.log(`Fetching stage data in same session for ${divisionName}: ${stageUrl}`);
+
+        const stageNavPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => null);
+        const stageClicked = await page.evaluate((url) => {
+          if (typeof window.submitRecaptcha !== "function") return { success: false };
+          submitRecaptcha(url);
+          return { success: true };
+        }, stageUrl);
+
+        if (stageClicked.success) {
+          await stageNavPromise;
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+          const stageHtml = await page.content();
+          const $s = cheerio.load(stageHtml);
+          const stageTables = $s('table');
+
+          stageTables.each((idx, stageTable) => {
+            const $stageTable = $s(stageTable);
+            const stageRecords = parseHtmlTable($stageTable, $s);
+            if (stageRecords.length === 0) return;
+
+            let stageName = null;
+            let el = $stageTable.prev();
+            for (let i = 0; i < 5 && el.length; i++) {
+              const tag = el.prop('tagName');
+              if (tag && /^H[1-6]$/.test(tag)) { stageName = el.text().trim(); break; }
+              el = el.prev();
+            }
+            if (!stageName) {
+              el = $stageTable.parent().prev();
+              for (let i = 0; i < 5 && el.length; i++) {
+                const tag = el.prop('tagName');
+                if (tag && /^H[1-6]$/.test(tag)) { stageName = el.text().trim(); break; }
+                el = el.prev();
+              }
+            }
+            if (!stageName) stageName = `Stage ${idx + 1}`;
+            stageName = stageName.replace(/^.+?\s*-\s*/, '').trim();
+            stageDataForDiv.push({ stageName, divisionName, records: stageRecords });
+          });
+          console.log(`Stage data for ${divisionName}: ${stageDataForDiv.length} stages`);
+        }
+      } catch (stageErr) {
+        console.log(`Stage fetch in same session failed for ${divisionName}: ${stageErr.message}`);
+      }
+
+      // Calculate total time per shooter from stages
+      const shooterTotalTime = {};
+      for (const stage of stageDataForDiv) {
+        const cols = Object.keys(stage.records[0] || {});
+        const timeKey = cols.find(k => /^time$/i.test(k));
+        const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
+        if (!timeKey || !numKey) continue;
+        for (const rec of stage.records) {
+          const sid = numKey ? String(rec[numKey]).trim() : null;
+          if (!sid || !/^\d+$/.test(sid)) continue;
+          const time = parseFloat(String(rec[timeKey] || '').replace(/[^0-9.\-]/g, '')) || 0;
+          shooterTotalTime[sid] = (shooterTotalTime[sid] || 0) + time;
+        }
+      }
+      // Inject Total Time into division records
+      for (const record of records) {
+        const sid = String(record['#'] || '').trim();
+        if (sid && shooterTotalTime[sid] !== undefined) {
+          record['Total Time'] = shooterTotalTime[sid].toFixed(2);
+        } else {
+          record['Total Time'] = '-';
+        }
+      }
+      console.log(`Total Time injected for ${Object.keys(shooterTotalTime).length} shooters in ${divisionName}`);
+
       if (records.length) {
-        return { records, shooterIds: Array.from(shooterIds) };
+        return { records, shooterIds: Array.from(shooterIds), stageData: stageDataForDiv };
       }
     }
 
@@ -748,9 +825,9 @@ app.post("/", async (req, res) => {
     const divisionResults = await Promise.all(
       overview.divisionLinks.map(async (division) => {
         console.log(`Fetching division: ${division.name}`);
-        const { records, shooterIds } = await fetchDivisionData(matchUrl, division.name, division.url, division.relativeUrl);
+        const { records, shooterIds, stageData } = await fetchDivisionData(matchUrl, division.name, division.url, division.relativeUrl);
         console.log(`Division ${division.name}: ${records.length} records, ${shooterIds.length} shooters`);
-        return { name: division.name, records, shooterIds };
+        return { name: division.name, records, shooterIds, stageData: stageData || [] };
       })
     );
     for (const result of divisionResults) {
@@ -760,49 +837,8 @@ app.post("/", async (req, res) => {
     preloadedResults[matchUrl].shooterIds = [...new Set(preloadedResults[matchUrl].shooterIds)];
     console.log(`Total unique shooters: ${preloadedResults[matchUrl].shooterIds.length}`);
 
-    // Fetch stage data per division and compute total time per shooter
-    console.log(`Fetching stage data for ${overview.divisionLinks.length} divisions to compute total times...`);
-    fetchDivisionStageData._debugSaved = false;
-    const stageResults = await Promise.all(
-      overview.divisionLinks.map(async (division) => {
-        console.log(`Fetching stages for total time: ${division.name}`);
-        const stages = await fetchDivisionStageData(matchUrl, division.name, division.url, division.relativeUrl);
-        return { divisionName: division.name, stages };
-      })
-    );
-
-    // For each division, sum Time per shooter from all stages and inject into division records
-    for (const { divisionName, stages } of stageResults) {
-      if (!stages || stages.length === 0) continue;
-      const shooterTotalTime = {};
-      for (const stage of stages) {
-        const cols = Object.keys(stage.records[0] || {});
-        const timeKey = cols.find(k => /^time$/i.test(k));
-        const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
-        if (!timeKey || !numKey) continue;
-        for (const record of stage.records) {
-          const shooterId = numKey ? String(record[numKey]).trim() : null;
-          if (!shooterId || !/^\d+$/.test(shooterId)) continue;
-          const time = parseFloat(String(record[timeKey] || '').replace(/[^0-9.\-]/g, '')) || 0;
-          shooterTotalTime[shooterId] = (shooterTotalTime[shooterId] || 0) + time;
-        }
-      }
-      // Inject Total Time into division records
-      if (preloadedResults[matchUrl].data[divisionName]) {
-        for (const record of preloadedResults[matchUrl].data[divisionName]) {
-          const shooterId = String(record['#'] || '').trim();
-          if (shooterId && shooterTotalTime[shooterId] !== undefined) {
-            record['Total Time'] = shooterTotalTime[shooterId].toFixed(2);
-          } else {
-            record['Total Time'] = '-';
-          }
-        }
-        console.log(`Injected Total Time for ${Object.keys(shooterTotalTime).length} shooters in ${divisionName}`);
-      }
-    }
-
-    // Cache stage data for combined calculation
-    preloadedResults[matchUrl].allStageResults = stageResults.flatMap(r => r.stages);
+    // Cache stage data for combined calculation (from same browser sessions)
+    preloadedResults[matchUrl].allStageResults = divisionResults.flatMap(r => r.stageData);
 
     // Auto-save to SQLite
     try {
@@ -845,36 +881,6 @@ app.get("/division", async (req, res) => {
     } else {
       const { records: fetchedRecords } = await fetchDivisionData(matchUrl, divisionName, divisionUrl);
       records = fetchedRecords;
-      // Fetch stage data and compute total time for non-preloaded divisions
-      try {
-        const relPath = new URL(divisionUrl).pathname;
-        const stages = await fetchDivisionStageData(matchUrl, divisionName, divisionUrl, relPath);
-        if (stages && stages.length > 0) {
-          const shooterTotalTime = {};
-          for (const stage of stages) {
-            const cols = Object.keys(stage.records[0] || {});
-            const timeKey = cols.find(k => /^time$/i.test(k));
-            const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
-            if (!timeKey || !numKey) continue;
-            for (const record of stage.records) {
-              const shooterId = numKey ? String(record[numKey]).trim() : null;
-              if (!shooterId || !/^\d+$/.test(shooterId)) continue;
-              const time = parseFloat(String(record[timeKey] || '').replace(/[^0-9.\-]/g, '')) || 0;
-              shooterTotalTime[shooterId] = (shooterTotalTime[shooterId] || 0) + time;
-            }
-          }
-          for (const record of records) {
-            const shooterId = String(record['#'] || '').trim();
-            if (shooterId && shooterTotalTime[shooterId] !== undefined) {
-              record['Total Time'] = shooterTotalTime[shooterId].toFixed(2);
-            } else {
-              record['Total Time'] = '-';
-            }
-          }
-        }
-      } catch (e) {
-        console.error(`Failed to fetch total time for ${divisionName}:`, e.message);
-      }
     }
     records = normalizeRecords(records);
     const summary = summarizeRecords(records);
