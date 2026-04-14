@@ -110,7 +110,7 @@ const extractDivisionLinks = ($, baseUrl) => {
 const fetchMatchOverview = async (url) => {
   const response = await axios.get(url, {
     headers: { "User-Agent": "ESSPortalReport/1.0" },
-    timeout: 15000,
+    timeout: 30000,
   });
 
   const $ = cheerio.load(response.data);
@@ -228,8 +228,10 @@ const fetchDivisionData = async (matchUrl, divisionName, divisionUrl, divisionRe
   }
 };
 
-const fetchShooterVerify = async (matchUrl, shooterId, browser) => {
-  console.log(`Starting fetchShooterVerify for shooter #${shooterId}`);
+// Fetch stage-by-stage results for a division using the ?group=stage view
+// This gives us HF per shooter per stage - needed for true cross-division combined
+const fetchDivisionStageData = async (matchUrl, divisionName, divisionUrl, divisionRelativeUrl) => {
+  const browser = await launchBrowser();
   let page;
 
   try {
@@ -237,76 +239,108 @@ const fetchShooterVerify = async (matchUrl, shooterId, browser) => {
     await page.setUserAgent(
       "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
     );
-
-    // Navigate to the match page (which contains the verify form)
     await page.goto(matchUrl, { waitUntil: "networkidle2", timeout: 60000 });
 
-    // Wait for the verify form to be present
-    await page.waitForSelector('#shooter', { timeout: 15000 });
+    // Navigate to stage view by appending ?group=stage to the division URL
+    const relPath = divisionRelativeUrl || getRelativePath(divisionUrl);
+    const stageUrl = relPath + (relPath.includes('?') ? '&' : '?') + 'group=stage';
+    console.log(`Fetching stage data for ${divisionName}: ${stageUrl}`);
 
-    // Fill in the shooter number
-    await page.type('#shooter', String(shooterId), { delay: 30 });
-
-    // Click the GO button via submitRecaptcha (same pattern as division fetching)
     const navigationPromise = page.waitForNavigation({ waitUntil: "networkidle2", timeout: 60000 }).catch(() => null);
-    const submitted = await page.evaluate(() => {
+    const clicked = await page.evaluate((url) => {
       if (typeof window.submitRecaptcha !== "function") {
-        return { success: false, error: "submitRecaptcha saknas på portal-sidan" };
+        return { success: false, error: "submitRecaptcha saknas" };
       }
-      submitRecaptcha(null, 'verify-form');
+      submitRecaptcha(url);
       return { success: true };
-    });
+    }, stageUrl);
 
-    if (!submitted.success) {
-      throw new Error(submitted.error);
-    }
-
+    if (!clicked.success) throw new Error(clicked.error);
     await navigationPromise;
-    await new Promise((resolve) => setTimeout(resolve, 1500));
+    await new Promise((resolve) => setTimeout(resolve, 2000));
 
     const html = await page.content();
-
-    // Save debug HTML for first shooter only
-    const fs = require('fs');
-    if (!fetchShooterVerify._debugSaved) {
-      fs.writeFileSync(path.join(__dirname, 'debug-verify-first.html'), html, 'utf8');
-      fetchShooterVerify._debugSaved = true;
-      console.log(`Saved first verify debug HTML`);
-    }
-
     const $ = cheerio.load(html);
 
-    // Parse ALL tables on the verify page
+    // Save debug HTML for first division
+    const fs = require('fs');
+    if (!fetchDivisionStageData._debugSaved) {
+      fs.writeFileSync(path.join(__dirname, 'debug-stage-first.html'), html, 'utf8');
+      fetchDivisionStageData._debugSaved = true;
+      console.log(`Saved stage debug HTML for ${divisionName}`);
+    }
+
+    // Parse stage data - the page should have multiple tables, one per stage
+    // Each stage has a heading (h2/h3/h4) followed by a table
     const stages = [];
     const tables = $('table');
 
-    tables.each((_, table) => {
-      const rows = parseHtmlTable($(table), $);
-      rows.forEach((row) => stages.push(row));
+    if (tables.length === 0) {
+      console.log(`No stage tables found for ${divisionName}`);
+      return [];
+    }
+
+    tables.each((idx, table) => {
+      const $table = $(table);
+      const records = parseHtmlTable($table, $);
+      if (records.length === 0) return;
+
+      // Try to find a stage name from a preceding heading
+      let stageName = null;
+      let el = $table.prev();
+      for (let i = 0; i < 5 && el.length; i++) {
+        const tag = el.prop('tagName');
+        if (tag && /^H[1-6]$/.test(tag)) {
+          stageName = el.text().trim();
+          break;
+        }
+        el = el.prev();
+      }
+      // Also check parent's preceding siblings
+      if (!stageName) {
+        el = $table.parent().prev();
+        for (let i = 0; i < 5 && el.length; i++) {
+          const tag = el.prop('tagName');
+          if (tag && /^H[1-6]$/.test(tag)) {
+            stageName = el.text().trim();
+            break;
+          }
+          el = el.prev();
+        }
+      }
+      if (!stageName) stageName = `Stage ${idx + 1}`;
+
+      // Normalize stage name: strip division prefix (e.g., "Production - Stage 01" -> "Stage 01")
+      // This is critical so the same physical stage across divisions gets the same key
+      // for cross-division HF comparison
+      stageName = stageName.replace(/^.+?\s*-\s*/, '').trim();
+
+      stages.push({ stageName, divisionName, records });
     });
 
-    if (stages.length > 0 && !fetchShooterVerify._colsLogged) {
-      console.log(`Verify stage columns: ${Object.keys(stages[0]).join(', ')}`);
-      console.log(`First stage sample: ${JSON.stringify(stages[0])}`);
-      fetchShooterVerify._colsLogged = true;
+    const totalRecords = stages.reduce((n, s) => n + s.records.length, 0);
+    console.log(`Division ${divisionName}: ${stages.length} stages, ${totalRecords} shooter records`);
+
+    if (stages.length > 0 && stages[0].records.length > 0) {
+      const cols = Object.keys(stages[0].records[0]);
+      console.log(`Stage columns: ${cols.join(', ')}`);
+      console.log(`First record sample: ${JSON.stringify(stages[0].records[0])}`);
     }
 
-    console.log(`  #${shooterId}: ${stages.length} stages`);
-    return { shooterId, stages };
+    return stages;
   } catch (error) {
-    console.log(`  #${shooterId}: ERROR - ${error.message}`);
-    return { shooterId, stages: [] };
+    console.log(`Stage fetch error for ${divisionName}: ${error.message}`);
+    return [];
   } finally {
-    if (page) {
-      await page.close();
-    }
+    if (page) await page.close();
+    await browser.close();
   }
 };
 
 const fetchMatchData = async (url) => {
   const response = await axios.get(url, {
     headers: { "User-Agent": "ESSPortalReport/1.0" },
-    timeout: 15000,
+    timeout: 30000,
   });
 
   const contentType = response.headers["content-type"] || "";
@@ -480,95 +514,114 @@ const summarizeRecords = (records) => {
   return summary;
 };
 
-// Calculate combined results from per-shooter verify stage data
+// Calculate combined results from division stage data
 // Uses hit factor (HF) per stage to rank all shooters across divisions
-const calculateCombinedFromVerify = (allShooterData, shooterLookup) => {
-  // allShooterData: [{shooterId, stages: [{stage columns...}, ...]}, ...]
-  // First, we need to understand the stage columns from the data
-  const validShooters = allShooterData.filter(s => s.stages && s.stages.length > 0);
-  
-  if (validShooters.length === 0) {
-    console.log('No valid stage data from verify pages');
+// allDivisionStages: [{stageName, divisionName, records: [{Place, #, Shooter, HF, ...}]}, ...]
+const calculateCombinedFromStages = (allDivisionStages, shooterLookup) => {
+  if (!allDivisionStages || allDivisionStages.length === 0) {
+    console.log('No stage data available');
     return [];
   }
 
-  const firstStage = validShooters[0].stages[0];
-  const cols = Object.keys(firstStage);
-  console.log(`Verify stage columns: ${cols.join(', ')}`);
+  // Identify the HF column from the first record
+  const firstStage = allDivisionStages.find(s => s.records && s.records.length > 0);
+  if (!firstStage) {
+    console.log('No stage records found');
+    return [];
+  }
 
-  // Identify key columns (case-insensitive search)
+  const cols = Object.keys(firstStage.records[0]);
+  console.log(`Stage record columns: ${cols.join(', ')}`);
+
+  // Find key columns (case-insensitive)
   const hfKey = cols.find(k => /hit\s*factor|^hf$/i.test(k));
-  const timeKey = cols.find(k => /^time$|stage\s*time/i.test(k));
-  const pointsKey = cols.find(k => /^points$|stage\s*points|raw\s*points/i.test(k));
-  const stageNameKey = cols.find(k => /^stage$|stage\s*name|^name$/i.test(k)) || cols.find(k => /stage/i.test(k));
-  const matchPtsKey = cols.find(k => /match\s*p|stage\s*%|score/i.test(k));
+  const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
+  const nameKey = cols.find(k => /shooter|name|competitor/i.test(k) && k !== '#' && k !== 'shooter_link');
+  const timeKey = cols.find(k => /^time$/i.test(k));
+  const pointsKey = cols.find(k => /^points$/i.test(k));
 
-  console.log(`Detected columns: HF=${hfKey}, time=${timeKey}, points=${pointsKey}, stage=${stageNameKey}, matchPts=${matchPtsKey}`);
+  console.log(`Detected: HF=${hfKey}, #=${numKey}, name=${nameKey}, time=${timeKey}, points=${pointsKey}`);
 
-  // Build per-shooter per-stage hit factors
-  // stageData[stageName][shooterId] = { hf, time, points }
+  if (!hfKey && !timeKey) {
+    console.log('Cannot find HF or time column for combined calculation');
+    return [];
+  }
+
+  const parseNum = (v) => parseFloat(String(v || '').replace(/[^0-9.\-]/g, '')) || 0;
+
+  // Group by stage name: stageData[stageName][shooterId] = { hf, division }
   const stageData = {};
-  
-  for (const shooter of validShooters) {
-    for (const stage of shooter.stages) {
-      const stageName = stageNameKey ? String(stage[stageNameKey]).trim() : `Stage`;
-      if (!stageData[stageName]) stageData[stageName] = {};
+  const shooterDivisions = {}; // shooterId -> divisionName
 
-      const parseNum = (v) => parseFloat(String(v || '').replace(/[^0-9.\-]/g, '')) || 0;
-      
-      let hf = hfKey ? parseNum(stage[hfKey]) : 0;
-      const time = timeKey ? parseNum(stage[timeKey]) : 0;
-      const points = pointsKey ? parseNum(stage[pointsKey]) : 0;
+  for (const stage of allDivisionStages) {
+    const stageName = stage.stageName;
+    if (!stageData[stageName]) stageData[stageName] = {};
 
-      // Calculate HF if not directly available
-      if (!hf && time > 0 && points > 0) {
-        hf = points / time;
+    for (const record of stage.records) {
+      const shooterId = numKey ? String(record[numKey]).trim() : null;
+      if (!shooterId || !/^\d+$/.test(shooterId)) continue;
+
+      let hf = hfKey ? parseNum(record[hfKey]) : 0;
+      // Calculate HF from points/time if not directly available
+      if (!hf && timeKey && pointsKey) {
+        const time = parseNum(record[timeKey]);
+        const points = parseNum(record[pointsKey]);
+        if (time > 0) hf = points / time;
       }
 
-      stageData[stageName][shooter.shooterId] = { hf, time, points };
+      stageData[stageName][shooterId] = { hf };
+      if (!shooterDivisions[shooterId]) {
+        shooterDivisions[shooterId] = stage.divisionName;
+      }
+
+      // Build lookup if not already there
+      if (!shooterLookup[shooterId] && nameKey) {
+        shooterLookup[shooterId] = {
+          name: record[nameKey] || '',
+          division: stage.divisionName,
+        };
+      }
     }
   }
 
   const stageNames = Object.keys(stageData);
-  console.log(`Found ${stageNames.length} stages: ${stageNames.join(', ')}`);
+  const totalShooters = new Set(Object.values(stageData).flatMap(s => Object.keys(s))).size;
+  console.log(`Combined: ${stageNames.length} stages, ${totalShooters} shooters across all divisions`);
 
   // For each stage, find the highest HF across ALL shooters (all divisions)
-  // Then calculate stage match points: (shooterHF / stageMaxHF) * maxStagePoints
-  // IPSC uses variable max stage points (number of scoring hits * 5), but for ranking
-  // we can use a fixed max (like 100) since it's proportional
-  const MAX_STAGE_POINTS = 100;
-
-  // Calculate match points per shooter
+  // Then calculate match points: (shooterHF / maxHF) × 100 per stage
   const shooterMatchPoints = {};
-  
+  const shooterStageCount = {};
+
   for (const stageName of stageNames) {
-    const stageShooters = stageData[stageName];
-    const maxHF = Math.max(...Object.values(stageShooters).map(s => s.hf));
-    
-    for (const [shooterId, data] of Object.entries(stageShooters)) {
-      if (!shooterMatchPoints[shooterId]) shooterMatchPoints[shooterId] = 0;
-      if (maxHF > 0 && data.hf > 0) {
-        shooterMatchPoints[shooterId] += (data.hf / maxHF) * MAX_STAGE_POINTS;
+    const entries = stageData[stageName];
+    const maxHF = Math.max(...Object.values(entries).map(s => s.hf), 0);
+
+    for (const [shooterId, data] of Object.entries(entries)) {
+      if (!shooterMatchPoints[shooterId]) {
+        shooterMatchPoints[shooterId] = 0;
+        shooterStageCount[shooterId] = 0;
       }
+      if (maxHF > 0 && data.hf > 0) {
+        shooterMatchPoints[shooterId] += (data.hf / maxHF) * 100;
+      }
+      shooterStageCount[shooterId]++;
     }
   }
 
-  // Maximum possible = stageCount * MAX_STAGE_POINTS
-  const maxPossible = stageNames.length * MAX_STAGE_POINTS;
-  const maxActual = Math.max(...Object.values(shooterMatchPoints));
+  const maxActual = Math.max(...Object.values(shooterMatchPoints), 0);
 
-  // Sort shooters by total match points
+  // Sort and rank
   const ranked = Object.entries(shooterMatchPoints)
     .map(([shooterId, totalPts]) => ({
       shooterId,
       totalPts,
       matchPct: maxActual > 0 ? (totalPts / maxActual) * 100 : 0,
-      lookup: shooterLookup[shooterId] || { name: `Shooter ${shooterId}`, division: '' },
-      stageCount: validShooters.find(s => s.shooterId === shooterId)?.stages.length || 0,
+      lookup: shooterLookup[shooterId] || { name: `Shooter ${shooterId}`, division: shooterDivisions[shooterId] || '' },
+      stageCount: shooterStageCount[shooterId] || 0,
     }))
     .sort((a, b) => b.totalPts - a.totalPts);
 
-  // Assign placement
   let rank = 0, lastPts = null;
   const records = ranked.map((entry, index) => {
     if (entry.totalPts !== lastPts) {
@@ -699,19 +752,21 @@ app.get("/combined", async (req, res) => {
     const overview = await fetchMatchOverview(matchUrl);
     console.log(`Loading combined for match: ${overview.title}`);
     let allRecords = [];
-    if (preloadedResults[matchUrl] && preloadedResults[matchUrl].verifyData) {
-      console.log(`Using cached combined verify data`);
-      allRecords = preloadedResults[matchUrl].verifyData;
-    } else if (preloadedResults[matchUrl] && preloadedResults[matchUrl].shooterIds && preloadedResults[matchUrl].shooterIds.length > 0) {
-      const shooterIds = preloadedResults[matchUrl].shooterIds;
-      console.log(`Fetching verify data for ${shooterIds.length} shooters to calculate true combined`);
 
-      // Build a lookup from preloaded division data: shooterId -> {name, division}
+    // Check for cached stage-based combined data
+    if (preloadedResults[matchUrl] && preloadedResults[matchUrl].stageData) {
+      console.log(`Using cached stage-based combined data`);
+      allRecords = preloadedResults[matchUrl].stageData;
+    } else if (preloadedResults[matchUrl] && preloadedResults[matchUrl].divisionLinks && preloadedResults[matchUrl].divisionLinks.length > 0) {
+      // Fetch stage data for each division (parallel, ~8 requests instead of 430 verify requests)
+      const divisions = preloadedResults[matchUrl].divisionLinks;
+      console.log(`Fetching stage data for ${divisions.length} divisions in parallel...`);
+
+      // Build shooter lookup from preloaded division data
       const shooterLookup = {};
       if (preloadedResults[matchUrl].data) {
         for (const [divName, records] of Object.entries(preloadedResults[matchUrl].data)) {
           for (const record of records) {
-            // Use the # column for lookup
             const numCol = record['#'];
             const nameKey = Object.keys(record).find((k) => /shooter|name|competitor/i.test(k) && k !== 'shooter_link');
             const id = numCol ? String(numCol).trim() : null;
@@ -721,69 +776,41 @@ app.get("/combined", async (req, res) => {
                 division: record.division || divName,
               };
             }
-            // Also try from shooter_link
-            if (record.shooter_link) {
-              const m = record.shooter_link.match(/\/shooter\/(\d+)/);
-              if (m && !shooterLookup[m[1]]) {
-                shooterLookup[m[1]] = {
-                  name: nameKey ? record[nameKey] : '',
-                  division: record.division || divName,
-                };
-              }
-            }
           }
         }
       }
-      console.log(`Built shooter lookup with ${Object.keys(shooterLookup).length} entries`);
+      console.log(`Shooter lookup: ${Object.keys(shooterLookup).length} entries`);
 
-      // Launch ONE shared browser for all verify fetches
-      const browser = await launchBrowser();
-      fetchShooterVerify._debugSaved = false;
-      fetchShooterVerify._colsLogged = false;
+      // Reset debug flag
+      fetchDivisionStageData._debugSaved = false;
 
-      try {
-        // Fetch verify data with concurrency limit of 5 (parallel tabs)
-        const concurrency = 5;
-        const allShooterData = [];
-        for (let i = 0; i < shooterIds.length; i += concurrency) {
-          const batch = shooterIds.slice(i, i + concurrency);
-          console.log(`Verify batch ${Math.floor(i / concurrency) + 1}/${Math.ceil(shooterIds.length / concurrency)} (${batch.length} shooters): ${batch.join(', ')}`);
-          const results = await Promise.all(
-            batch.map((id) => fetchShooterVerify(matchUrl, id, browser))
-          );
-          allShooterData.push(...results);
-          console.log(`  Progress: ${Math.min(i + concurrency, shooterIds.length)}/${shooterIds.length} done`);
-        }
+      // Fetch stage view for each division in parallel
+      const stageResults = await Promise.all(
+        divisions.map(async (division) => {
+          console.log(`Fetching stages for: ${division.name}`);
+          const stages = await fetchDivisionStageData(matchUrl, division.name, division.url, division.relativeUrl);
+          return stages;
+        })
+      );
 
-        // Calculate true combined from raw stage HF data
-        allRecords = calculateCombinedFromVerify(allShooterData, shooterLookup);
-      } finally {
-        await browser.close();
-      }
+      // Flatten all stage data
+      const allDivisionStages = stageResults.flat();
+      console.log(`Total stage data: ${allDivisionStages.length} stage-division entries`);
+
+      // Calculate combined from stage HF data
+      allRecords = calculateCombinedFromStages(allDivisionStages, shooterLookup);
 
       if (allRecords.length > 0) {
-        console.log(`Combined calculated from verify stage data`);
-        preloadedResults[matchUrl].verifyData = allRecords;
+        console.log(`Combined calculated from stage HF data`);
+        preloadedResults[matchUrl].stageData = allRecords;
       } else {
-        console.log(`Verify data was empty, falling back to division aggregation`);
-        // Fallback
-        if (preloadedResults[matchUrl] && preloadedResults[matchUrl].data) {
-          for (const division of overview.divisionLinks) {
-            if (preloadedResults[matchUrl].data[division.name]) {
-              allRecords = allRecords.concat(preloadedResults[matchUrl].data[division.name]);
-            }
-          }
-        }
-        allRecords = normalizeRecords(allRecords);
-        allRecords = assignCombinedPlacement(allRecords);
-        allRecords = allRecords.map((record) => {
-          const filtered = { ...record };
-          delete filtered['Score %'];
-          return filtered;
-        });
+        console.log(`Stage data was empty, falling back to Total Score ranking`);
       }
-    } else {
-      // Fallback to aggregating divisions
+    }
+
+    // Fallback: rank by Total Score from division overview data
+    if (allRecords.length === 0) {
+      console.log(`Using fallback: ranking by Total Score from division data`);
       if (preloadedResults[matchUrl] && preloadedResults[matchUrl].data) {
         for (const division of overview.divisionLinks) {
           if (preloadedResults[matchUrl].data[division.name]) {
@@ -798,7 +825,6 @@ app.get("/combined", async (req, res) => {
       }
       allRecords = normalizeRecords(allRecords);
       allRecords = assignCombinedPlacement(allRecords);
-      // Remove division-relative Score % since we now have overall Match %
       allRecords = allRecords.map((record) => {
         const filtered = { ...record };
         delete filtered['Score %'];
@@ -806,7 +832,7 @@ app.get("/combined", async (req, res) => {
       });
     }
     const summary = summarizeRecords(allRecords);
-    const wasPreloaded = !!(preloadedResults[matchUrl] && (preloadedResults[matchUrl].verifyData || preloadedResults[matchUrl].data));
+    const wasPreloaded = !!(preloadedResults[matchUrl] && (preloadedResults[matchUrl].stageData || preloadedResults[matchUrl].data));
     return res.render("index", {
       matchUrl,
       matchTitle: overview.title,
