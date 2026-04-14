@@ -136,6 +136,7 @@ const fetchMatchOverview = async (url) => {
   const response = await axios.get(url, {
     headers: { "User-Agent": "ESSPortalReport/1.0" },
     timeout: 30000,
+    responseEncoding: 'utf-8',
   });
 
   const $ = cheerio.load(response.data);
@@ -366,6 +367,7 @@ const fetchMatchData = async (url) => {
   const response = await axios.get(url, {
     headers: { "User-Agent": "ESSPortalReport/1.0" },
     timeout: 30000,
+    responseEncoding: 'utf-8',
   });
 
   const contentType = response.headers["content-type"] || "";
@@ -758,6 +760,50 @@ app.post("/", async (req, res) => {
     preloadedResults[matchUrl].shooterIds = [...new Set(preloadedResults[matchUrl].shooterIds)];
     console.log(`Total unique shooters: ${preloadedResults[matchUrl].shooterIds.length}`);
 
+    // Fetch stage data per division and compute total time per shooter
+    console.log(`Fetching stage data for ${overview.divisionLinks.length} divisions to compute total times...`);
+    fetchDivisionStageData._debugSaved = false;
+    const stageResults = await Promise.all(
+      overview.divisionLinks.map(async (division) => {
+        console.log(`Fetching stages for total time: ${division.name}`);
+        const stages = await fetchDivisionStageData(matchUrl, division.name, division.url, division.relativeUrl);
+        return { divisionName: division.name, stages };
+      })
+    );
+
+    // For each division, sum Time per shooter from all stages and inject into division records
+    for (const { divisionName, stages } of stageResults) {
+      if (!stages || stages.length === 0) continue;
+      const shooterTotalTime = {};
+      for (const stage of stages) {
+        const cols = Object.keys(stage.records[0] || {});
+        const timeKey = cols.find(k => /^time$/i.test(k));
+        const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
+        if (!timeKey || !numKey) continue;
+        for (const record of stage.records) {
+          const shooterId = numKey ? String(record[numKey]).trim() : null;
+          if (!shooterId || !/^\d+$/.test(shooterId)) continue;
+          const time = parseFloat(String(record[timeKey] || '').replace(/[^0-9.\-]/g, '')) || 0;
+          shooterTotalTime[shooterId] = (shooterTotalTime[shooterId] || 0) + time;
+        }
+      }
+      // Inject Total Time into division records
+      if (preloadedResults[matchUrl].data[divisionName]) {
+        for (const record of preloadedResults[matchUrl].data[divisionName]) {
+          const shooterId = String(record['#'] || '').trim();
+          if (shooterId && shooterTotalTime[shooterId] !== undefined) {
+            record['Total Time'] = shooterTotalTime[shooterId].toFixed(2);
+          } else {
+            record['Total Time'] = '-';
+          }
+        }
+        console.log(`Injected Total Time for ${Object.keys(shooterTotalTime).length} shooters in ${divisionName}`);
+      }
+    }
+
+    // Cache stage data for combined calculation
+    preloadedResults[matchUrl].allStageResults = stageResults.flatMap(r => r.stages);
+
     // Auto-save to SQLite
     try {
       saveMatchToDb(matchUrl, overview.title, preloadedResults[matchUrl].data, null);
@@ -799,6 +845,36 @@ app.get("/division", async (req, res) => {
     } else {
       const { records: fetchedRecords } = await fetchDivisionData(matchUrl, divisionName, divisionUrl);
       records = fetchedRecords;
+      // Fetch stage data and compute total time for non-preloaded divisions
+      try {
+        const relPath = new URL(divisionUrl).pathname;
+        const stages = await fetchDivisionStageData(matchUrl, divisionName, divisionUrl, relPath);
+        if (stages && stages.length > 0) {
+          const shooterTotalTime = {};
+          for (const stage of stages) {
+            const cols = Object.keys(stage.records[0] || {});
+            const timeKey = cols.find(k => /^time$/i.test(k));
+            const numKey = cols.find(k => k === '#') || cols.find(k => /^num|competitor/i.test(k));
+            if (!timeKey || !numKey) continue;
+            for (const record of stage.records) {
+              const shooterId = numKey ? String(record[numKey]).trim() : null;
+              if (!shooterId || !/^\d+$/.test(shooterId)) continue;
+              const time = parseFloat(String(record[timeKey] || '').replace(/[^0-9.\-]/g, '')) || 0;
+              shooterTotalTime[shooterId] = (shooterTotalTime[shooterId] || 0) + time;
+            }
+          }
+          for (const record of records) {
+            const shooterId = String(record['#'] || '').trim();
+            if (shooterId && shooterTotalTime[shooterId] !== undefined) {
+              record['Total Time'] = shooterTotalTime[shooterId].toFixed(2);
+            } else {
+              record['Total Time'] = '-';
+            }
+          }
+        }
+      } catch (e) {
+        console.error(`Failed to fetch total time for ${divisionName}:`, e.message);
+      }
     }
     records = normalizeRecords(records);
     const summary = summarizeRecords(records);
@@ -835,6 +911,35 @@ app.get("/combined", async (req, res) => {
     if (preloadedResults[matchUrl] && preloadedResults[matchUrl].stageData) {
       console.log(`Using cached stage-based combined data`);
       allRecords = preloadedResults[matchUrl].stageData;
+    } else if (preloadedResults[matchUrl] && preloadedResults[matchUrl].allStageResults && preloadedResults[matchUrl].allStageResults.length > 0) {
+      // Use cached stage data from preload to calculate combined
+      console.log(`Using cached stage data from preload to calculate combined...`);
+      const shooterLookup = {};
+      if (preloadedResults[matchUrl].data) {
+        for (const [divName, records] of Object.entries(preloadedResults[matchUrl].data)) {
+          for (const record of records) {
+            const numCol = record['#'];
+            const nameKey = Object.keys(record).find((k) => /shooter|name|competitor/i.test(k) && k !== 'shooter_link');
+            const id = numCol ? String(numCol).trim() : null;
+            if (id && /^\d+$/.test(id)) {
+              shooterLookup[id] = {
+                name: nameKey ? record[nameKey] : '',
+                division: record.division || divName,
+              };
+            }
+          }
+        }
+      }
+      allRecords = calculateCombinedFromStages(preloadedResults[matchUrl].allStageResults, shooterLookup);
+      if (allRecords.length > 0) {
+        preloadedResults[matchUrl].stageData = allRecords;
+        try {
+          saveMatchToDb(matchUrl, overview.title, preloadedResults[matchUrl].data, allRecords);
+          console.log("Combined results saved to SQLite");
+        } catch (e) {
+          console.error("Failed to save combined to SQLite:", e.message);
+        }
+      }
     } else if (preloadedResults[matchUrl] && preloadedResults[matchUrl].divisionLinks && preloadedResults[matchUrl].divisionLinks.length > 0) {
       // Fetch stage data for each division (parallel, ~8 requests instead of 430 verify requests)
       const divisions = preloadedResults[matchUrl].divisionLinks;
