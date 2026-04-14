@@ -174,6 +174,15 @@ app.post("/", async (req, res) => {
 });
 
 const port = process.env.PORT || 5000;
-app.listen(port, () => {
+const server = app.listen(port, () => {
   console.log(`ESSPortal web app körs på http://127.0.0.1:${port}`);
+});
+
+server.on("error", (err) => {
+  if (err.code === "EADDRINUSE") {
+    console.error(`Port ${port} är upptagen. Ange en annan port med PORT=<nummer> eller stoppa processen som använder porten.`);
+  } else {
+    console.error(err);
+  }
+  process.exit(1);
 });

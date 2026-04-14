@@ -29,6 +29,12 @@ npm install
 npm start
 ```
 
+Om port 5000 redan är upptagen kan du ange en annan port:
+
+```powershell
+$env:PORT=5001; npm start
+```
+
 3. Öppna webbläsaren:
 
 `http://127.0.0.1:5000`
