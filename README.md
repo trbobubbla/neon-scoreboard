@@ -39,6 +39,13 @@ $env:PORT=5001; npm start
 
 `http://127.0.0.1:5000`
 
+## Samla alla divisioner
+
+När du anger en matchlänk försöker appen nu själv hitta alla divisionsresultat på match-sidan.
+Den extraherar varje divisionslänk och försöker hämta resultatdata per division.
+
+Om en divisionssida är blockerad av reCAPTCHA visas en notis i resultatlistan istället för tabellen.
+
 4. Klistra in matchlänken och skicka formuläret.
 
 ## Support för URL

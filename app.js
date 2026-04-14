@@ -58,6 +58,77 @@ const parseKeyValueList = ($, selector) => {
   return records;
 };
 
+const extractDivisionLinks = ($, baseUrl) => {
+  const links = [];
+  $(".list-group-item").each((_, node) => {
+    const href = $(node).attr("onclick") || "";
+    const match = href.match(/submitRecaptcha\(['"]([^'"]+)['"]/);
+    if (match) {
+      const divisionName = $(node).text().trim();
+      try {
+        links.push({
+          name: divisionName,
+          url: new URL(match[1], baseUrl).toString(),
+        });
+      } catch (_) {
+        links.push({ name: divisionName, url: match[1] });
+      }
+    }
+  });
+  return links;
+};
+
+const fetchDivisionData = async (url, divisionName) => {
+  try {
+    const response = await axios.get(url, {
+      headers: { "User-Agent": "ESSPortalReport/1.0" },
+      timeout: 15000,
+      maxRedirects: 0,
+      validateStatus: (status) => status >= 200 && status < 400,
+    });
+
+    const $ = cheerio.load(response.data);
+    const table = $("table").first();
+    if (table.length) {
+      const records = parseHtmlTable(table, $).map((record) => ({
+        division: divisionName,
+        source_url: url,
+        ...record,
+      }));
+      if (records.length) {
+        return records;
+      }
+    }
+
+    const hasCaptcha = $("#captcha-form").length > 0 || $("input[name='g-recaptcha-response']").length > 0;
+    if (hasCaptcha) {
+      return [
+        {
+          division: divisionName,
+          source_url: url,
+          note: "Resultat är blockerade av reCAPTCHA och kan inte hämtas automatiskt.",
+        },
+      ];
+    }
+  } catch (error) {
+    return [
+      {
+        division: divisionName,
+        source_url: url,
+        note: `Kunde inte hämta divisionen: ${error.message}`,
+      },
+    ];
+  }
+
+  return [
+    {
+      division: divisionName,
+      source_url: url,
+      note: "Ingen tabell hittades på divisionsresultatsidan.",
+    },
+  ];
+};
+
 const fetchMatchData = async (url) => {
   const response = await axios.get(url, {
     headers: { "User-Agent": "ESSPortalReport/1.0" },
@@ -76,6 +147,16 @@ const fetchMatchData = async (url) => {
   }
 
   const $ = cheerio.load(response.data);
+  const divisionLinks = extractDivisionLinks($, url);
+  if (divisionLinks.length && !url.includes("/result/")) {
+    let allRecords = [];
+    for (const division of divisionLinks) {
+      const divisionRecords = await fetchDivisionData(division.url, division.name);
+      allRecords = allRecords.concat(divisionRecords);
+    }
+    return allRecords;
+  }
+
   const table = $("table").first();
   if (table.length) {
     const records = parseHtmlTable(table, $);
